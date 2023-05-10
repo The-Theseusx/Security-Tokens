@@ -1,6 +1,7 @@
 {
 	"extends": "solhint:recommended",
 	"rules": {
-		"compiler-version": false
+		"compiler-version": false,
+		"no-empty-blocks": false
 	}
 }
