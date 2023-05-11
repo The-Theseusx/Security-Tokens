@@ -7,6 +7,8 @@ import { IERC1594 } from "./IERC1594.sol";
 /**
  * @title ERC1594
  * @dev ERC1594 core security logic for fungible security tokens
+ * @dev Thoughts: Due to somewhat old standard, transfers with data should return booleans to be truly ERC20 compatible, no?
+ * @dev Thoughts: Utilize signature verification for transfers with data? If so, how to handle the data? Should it be a struct? EIP712?
  */
 
 contract ERC1594 is IERC1594, ERC20, Ownable2Step {
@@ -16,13 +18,7 @@ contract ERC1594 is IERC1594, ERC20, Ownable2Step {
 	bool private _isIssuable;
 
 	event TransferWithData(address indexed from, address indexed to, uint256 amount, bytes data);
-	event TransferFromWithData(
-		address indexed operator,
-		address indexed from,
-		address indexed to,
-		uint256 amount,
-		bytes data
-	);
+	event IssuanceDisabled();
 
 	constructor(string memory name_, string memory symbol_, bool issue_) ERC20(name_, symbol_) {
 		_isIssuable = issue_;
@@ -47,32 +43,28 @@ contract ERC1594 is IERC1594, ERC20, Ownable2Step {
 	 * @dev See {IERC1594-redeem}.
 	 */
 	function redeem(uint256 amount, bytes memory data) public virtual override {
-		_burn(msg.sender, amount);
-		emit Redeemed(msg.sender, msg.sender, amount, data);
+		_redeem(amount, data);
 	}
 
 	/**
 	 * @dev See {IERC1594-redeemFrom}.
 	 */
 	function redeemFrom(address tokenHolder, uint256 amount, bytes memory data) public virtual override onlyOwner {
-		_burn(tokenHolder, amount);
-		emit Redeemed(msg.sender, tokenHolder, amount, data);
+		_redeemFrom(tokenHolder, amount, data);
 	}
 
 	/**
-	 * @dev See {IERC1594-transferWithData}.
+	 * @dev See {IERC1594-transferWithData}.amount
 	 */
 	function transferWithData(address to, uint256 amount, bytes memory data) public virtual override {
-		transfer(to, amount);
-		emit TransferWithData(msg.sender, to, amount, data);
+		_transferWithData(msg.sender, to, amount, data);
 	}
 
 	/**
 	 * @dev See {IERC1594-transferFromWithData}.
 	 */
 	function transferFromWithData(address from, address to, uint256 amount, bytes memory data) public virtual override {
-		transferFrom(from, to, amount);
-		emit TransferFromWithData(msg.sender, from, to, amount, data);
+		_transferWithData(from, to, amount, data);
 	}
 
 	/**
@@ -85,6 +77,9 @@ contract ERC1594 is IERC1594, ERC20, Ownable2Step {
 	) public view virtual override returns (bool, bytes memory, bytes32) {
 		if (balanceOf(msg.sender) < amount) return (false, bytes("0x52"), bytes32(0));
 		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
+		if (data.length > 0) {
+			//do something with data
+		}
 		return (true, bytes("0x51"), bytes32(0));
 	}
 
@@ -100,13 +95,44 @@ contract ERC1594 is IERC1594, ERC20, Ownable2Step {
 		if (amount > allowance(from, msg.sender)) return (false, bytes("0x53"), bytes32(0));
 		if (balanceOf(from) < amount) return (false, bytes("0x52"), bytes32(0));
 		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
+		if (data.length > 0) {
+			//do something with data
+		}
 		return (true, bytes("0x51"), bytes32(0));
+	}
+
+	function _disableIssuance() internal virtual {
+		_isIssuable = false;
+		emit IssuanceDisabled();
 	}
 
 	function _issue(address tokenHolder, uint256 amount, bytes memory data) internal virtual {
 		_beforeTokenTransferWithData(address(0), tokenHolder, amount, data);
 		_mint(tokenHolder, amount);
 		emit Issued(msg.sender, tokenHolder, amount, data);
+		_afterTokenTransferWithData(address(0), tokenHolder, amount, data);
+	}
+
+	function _transferWithData(address from, address to, uint256 amount, bytes memory data) internal virtual {
+		_beforeTokenTransferWithData(from, to, amount, data);
+		///do something with data
+		_transfer(from, to, amount);
+		emit TransferWithData(msg.sender, to, amount, data);
+		_afterTokenTransferWithData(from, to, amount, data);
+	}
+
+	function _redeem(uint256 amount, bytes memory data) internal virtual {
+		_beforeTokenTransferWithData(msg.sender, address(0), amount, data);
+		_burn(msg.sender, amount);
+		emit Redeemed(msg.sender, msg.sender, amount, data);
+		_afterTokenTransferWithData(msg.sender, address(0), amount, data);
+	}
+
+	function _redeemFrom(address tokenHolder, uint256 amount, bytes memory data) internal virtual {
+		_beforeTokenTransferWithData(tokenHolder, address(0), amount, data);
+		_burn(tokenHolder, amount);
+		emit Redeemed(msg.sender, tokenHolder, amount, data);
+		_afterTokenTransferWithData(tokenHolder, address(0), amount, data);
 	}
 
 	/**
@@ -144,5 +170,10 @@ contract ERC1594 is IERC1594, ERC20, Ownable2Step {
 	 *
 	 * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
 	 */
-	function _afterTokenTransferWithData(address from, address to, uint256 amount) internal virtual {}
+	function _afterTokenTransferWithData(
+		address from,
+		address to,
+		uint256 amount,
+		bytes memory data
+	) internal virtual {}
 }
