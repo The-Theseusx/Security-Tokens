@@ -120,6 +120,15 @@ contract ERC1594 is IERC1594, ERC20, EIP712, Ownable2Step {
 		return (true, bytes("0x51"), bytes32(0));
 	}
 
+	function disableIssuance() public virtual onlyOwner {
+		_disableIssuance();
+	}
+
+	function renounceOwnership() public virtual override onlyOwner {
+		_disableIssuance();
+		super.renounceOwnership();
+	}
+
 	function _disableIssuance() internal virtual {
 		_isIssuable = false;
 		emit IssuanceDisabled();

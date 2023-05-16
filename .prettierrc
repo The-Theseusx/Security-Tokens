@@ -8,6 +8,7 @@
 	"bracketSpacing": true,
 	"endOfLine": "auto",
 	"overrides": [
+		{ "files":"", "excludeFiles": "*.md" },
 		{
 			"files": "*.sol",
 			"options": {
