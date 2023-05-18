@@ -4,7 +4,12 @@ pragma solidity ^0.8.0;
 import { Ownable2Step } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import { IERC1643 } from "./IERC1643.sol";
 
-contract ERC1643 is IERC1643, Ownable2Step {
+/**
+ * @title ERC1643
+ * @dev ERC1643 support for document management of security tokens
+ */
+
+abstract contract ERC1643 is IERC1643, Ownable2Step {
 	struct Document {
 		bytes32 docHash; // Hash of the document
 		uint256 lastModified; // Timestamp at which document details was last modified

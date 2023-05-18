@@ -23,7 +23,6 @@ contract ERC1594 is IERC1594, ERC20, EIP712, Ownable2Step {
 
 	/**
 	 * @dev should track if token is issuable or not. Should not be modifiable if false.
-	 * @dev default to true. See _disableIssuance() to disable.
 	 */
 	bool private _isIssuable = true;
 
@@ -81,7 +80,7 @@ contract ERC1594 is IERC1594, ERC20, EIP712, Ownable2Step {
 		uint256 amount,
 		bytes calldata data
 	) public virtual override {
-		_transferWithData(from, to, amount, data);
+		_transferFromWithData(from, to, amount, data);
 	}
 
 	/**
@@ -94,9 +93,10 @@ contract ERC1594 is IERC1594, ERC20, EIP712, Ownable2Step {
 	) public view virtual override returns (bool, bytes memory, bytes32) {
 		if (balanceOf(msg.sender) < amount) return (false, bytes("0x52"), bytes32(0));
 		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
-		if (data.length == 0) return (true, bytes("0x51"), bytes32(0)); //no data just check for transferability
 		if (data.length != 0) {
 			///cannot validate data because this is a view function
+			///@dev check if data length is 65 bytes (32 bytes for v, 32 bytes for s, 1 byte for v)
+			if (data.length != 65) return (false, bytes("0x50"), bytes32(0));
 		}
 		return (true, bytes("0x51"), bytes32(0));
 	}
@@ -116,6 +116,8 @@ contract ERC1594 is IERC1594, ERC20, EIP712, Ownable2Step {
 		if (data.length == 0) return (true, bytes("0x51"), bytes32(0)); //no data just check for transferability
 		if (data.length != 0) {
 			///cannot validate data because this is a view function
+			///@dev check if data length is 65 bytes (32 bytes for v, 32 bytes for s, 1 byte for v)
+			if (data.length != 65) return (false, bytes("0x50"), bytes32(0));
 		}
 		return (true, bytes("0x51"), bytes32(0));
 	}
@@ -146,11 +148,20 @@ contract ERC1594 is IERC1594, ERC20, EIP712, Ownable2Step {
 
 	function _transferWithData(address from, address to, uint256 amount, bytes calldata data) internal virtual {
 		_beforeTokenTransferWithData(from, to, amount, data);
-		if (data.length != 0) {
-			require(_validateData(owner(), to, amount, data), "ERC1594: invalid data");
-		}
+
+		require(_validateData(owner(), to, amount, data), "ERC1594: invalid data");
 
 		_transfer(from, to, amount);
+		emit TransferWithData(msg.sender, to, amount, data);
+		_afterTokenTransferWithData(from, to, amount, data);
+	}
+
+	function _transferFromWithData(address from, address to, uint256 amount, bytes calldata data) internal virtual {
+		_beforeTokenTransferWithData(from, to, amount, data);
+
+		require(_validateData(owner(), to, amount, data), "ERC1594: invalid data");
+
+		transferFrom(from, to, amount);
 		emit TransferWithData(msg.sender, to, amount, data);
 		_afterTokenTransferWithData(from, to, amount, data);
 	}
