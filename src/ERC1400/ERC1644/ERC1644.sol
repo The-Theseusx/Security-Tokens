@@ -116,7 +116,7 @@ contract ERC1644 is IERC1644, ERC1594 {
 	) internal virtual override {
 		_beforeTokenTransferWithData(from, to, amount, data);
 
-		require(_validateData(_controller, to, amount, data), "ERC1594: invalid data");
+		require(_validateData(_controller, from, to, amount, data), "ERC1594: invalid data");
 
 		_transfer(from, to, amount);
 		emit TransferWithData(msg.sender, to, amount, data);
@@ -126,7 +126,7 @@ contract ERC1644 is IERC1644, ERC1594 {
 	function _redeemFrom(address tokenHolder, uint256 amount, bytes calldata data) internal virtual override {
 		_beforeTokenTransferWithData(tokenHolder, address(0), amount, data);
 
-		require(_validateData(_controller, tokenHolder, amount, data), "ERC1594: invalid data");
+		require(_validateData(_controller, tokenHolder, address(0), amount, data), "ERC1594: invalid data");
 
 		_burn(tokenHolder, amount);
 		emit Redeemed(msg.sender, tokenHolder, amount, data);
