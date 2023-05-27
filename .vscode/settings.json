@@ -1,4 +1,5 @@
 {
 	"editor.formatOnSave": true,
-	"solidity.packageDefaultDependenciesDirectory": "lib"
+	"solidity.packageDefaultDependenciesDirectory": "lib",
+	"cSpell.words": ["theseusX", "THESEUSX"]
 }

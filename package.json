@@ -1,7 +1,7 @@
 {
 	"name": "security-tokens",
 	"version": "1.0.0",
-	"description": "A modern implementation of the ERC1400 umbrella of security token standards for ethereum",
+	"description": "A modern opinionated implementation of the ERC1400 umbrella of security token standards for ethereum",
 	"main": "index.js",
 	"directories": {
 		"lib": "lib",
@@ -14,12 +14,7 @@
 		"type": "git",
 		"url": "git+https://github.com/The-Theseusx/Security-Tokens.git"
 	},
-	"keywords": [
-		"ERC1400",
-		"securities",
-		"security",
-		"tokens"
-	],
+	"keywords": ["ERC1400", "securities", "security", "tokens"],
 	"author": "Jayus Jay",
 	"license": "ISC",
 	"bugs": {
