@@ -1,10 +1,11 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import { Ownable2Step } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import { ERC165 } from "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
 import { IERC1410 } from "./IERC1410.sol";
 
-contract ERC1410 is IERC1410, ERC165 {
+contract ERC1410 is IERC1410, ERC165, Ownable2Step {
 	/**
 	 * @dev partitioning is to group tokens into different buckets though the underlying token contract is one.
 	 */
@@ -30,7 +31,7 @@ contract ERC1410 is IERC1410, ERC165 {
 	bytes32[] private _partitions;
 
 	/**
-	 *@dev mapping of partition to index in _partitions array.
+	 * @dev mapping of partition to index in _partitions array.
 	 */
 	mapping(bytes32 => uint256) private _partitionIndex;
 
@@ -38,6 +39,11 @@ contract ERC1410 is IERC1410, ERC165 {
 	 * @dev mapping from user to array of partitions.
 	 */
 	mapping(address => bytes32[]) private _partitionsOf;
+
+	/**
+	 * @dev mapping of user to mapping of partition in _partitionsOf array to index of partition in this array.
+	 */
+	mapping(address => mapping(bytes32 => uint256)) private _partitionIndexOfUser;
 
 	/**
 	 * @dev mapping from user to total token balances irrespective of partition.
@@ -122,42 +128,13 @@ contract ERC1410 is IERC1410, ERC165 {
 		uint256 amount,
 		bytes calldata data
 	) public view override returns (bytes memory, bytes32, bytes32) {
-		return _canTransferByPartition(partition, from, to, amount, data);
-	}
+		uint256 index = _partitionIndex[partition];
+		if (index == 0 && _partitions[0] != partition) return ("0x50", "ERC1410: IP", "");
+		if (_balancesByPartition[from][partition] < amount) return ("0x52", "ERC1410: IPB", "");
+		if (to == address(0)) return ("0x57", "ERC1410: IR", "");
+		//validate data
 
-	function _canTransferByPartition(
-		bytes32 partition,
-		address from,
-		address to,
-		uint256 value,
-		bytes memory data
-	) internal view virtual returns (bytes memory, bytes32, bytes32) {
-		// if (_balancesByPartition[from][partition] < value) {
-		// 	return (
-		// 		hex"50",
-		// 		partition,
-		// 		bytes32(uint256(address(from)) ^ uint256(address(to)) ^ uint256(value) ^ uint256(data))
-		// 	);
-		// } else if (_balancesByPartition[from][partition] - value < _totalSupplyByPartition[partition] / 100) {
-		// 	return (
-		// 		hex"51",
-		// 		partition,
-		// 		bytes32(uint256(address(from)) ^ uint256(address(to)) ^ uint256(value) ^ uint256(data))
-		// 	);
-		// } else if (_partitionsOf[to].length == 0) {
-		// 	return (
-		// 		hex"52",
-		// 		partition,
-		// 		bytes32(uint256(address(from)) ^ uint256(address(to)) ^ uint256(value) ^ uint256(data))
-		// 	);
-		// } else {
-		// 	return (
-		// 		hex"00",
-		// 		partition,
-		// 		bytes32(uint256(address(from)) ^ uint256(address(to)) ^ uint256(value) ^ uint256(data))
-		// 	);
-		// }
-		return (new bytes(0), bytes32(0), bytes32(0));
+		return ("0x51", "ERC1410: CT", "");
 	}
 
 	function authorizeOperator(address operator) public virtual override {
@@ -185,7 +162,7 @@ contract ERC1410 is IERC1410, ERC165 {
 		address account,
 		uint256 amount,
 		bytes calldata data
-	) external override {
+	) external override onlyOwner {
 		_issueByPartition(partition, msg.sender, account, amount, data);
 	}
 
@@ -202,32 +179,41 @@ contract ERC1410 is IERC1410, ERC165 {
 		_totalSupplyByPartition[partition] += amount;
 		_balances[account] += amount;
 		_balancesByPartition[account][partition] += amount;
-		_addTokenToPartitionList(partition, account);
+		_addTokenToPartitionList(partition, account, amount);
 		emit IssuedByPartition(partition, account, amount, data);
 		//emit Transfer(address(0), account, amount);
 	}
 
-	function _addTokenToPartitionList(bytes32 partition, address account) internal virtual {
-		uint256 length = _partitionsOf[account].length;
+	function _isUserPartion(bytes32 partition, address user) internal view returns (bool) {
+		bytes32[] memory partitions = _partitionsOf[user];
+		uint256 index = _partitionIndexOfUser[user][partition];
+		if (index == 0 && partitions[0] != partition) return false;
+		return true;
+	}
+
+	function _addTokenToPartitionList(bytes32 partition, address account, uint256 amount) internal virtual {
+		bytes32[] memory partitions = _partitionsOf[account];
 		uint256 index = _partitionIndex[partition];
-		if (length == 0) {
-			_partitionsOf[account].push(partition);
-			_partitionIndex[partition] = 0;
+
+		bytes32 currentPartition = partitions[index];
+
+		if (partition != currentPartition) {
+			///partition does not exist
+
+			//add partition to contract
+			_partitionIndex[partition] = partitions.length;
+			_partitions.push(partition);
 			_totalPartitions += 1;
+
+			//add partition to user
+			_partitionIndexOfUser[account][partition] = _partitionsOf[account].length;
+			_partitionsOf[account].push(partition);
 		} else {
-			bytes32 currentPartition = _partitionsOf[account][index];
-			if (partition != currentPartition) {
-				if (index == length - 1) {
-					_partitionsOf[account].push(partition);
-					_partitionIndex[partition] = length;
-					_totalPartitions += 1;
-				} else {
-					bytes32 lastPartition = _partitionsOf[account][length - 1];
-					_partitionsOf[account][index] = partition;
-					_partitionIndex[partition] = index;
-					_partitionsOf[account][length - 1] = lastPartition;
-					_partitionIndex[lastPartition] = length - 1;
-				}
+			///partition exists
+
+			if (!_isUserPartion(partition, account)) {
+				_partitionIndexOfUser[account][partition] = _partitionsOf[account].length;
+				_partitionsOf[account].push(partition);
 			}
 		}
 	}
@@ -282,7 +268,6 @@ contract ERC1410 is IERC1410, ERC165 {
 		bytes calldata data,
 		bytes calldata operatorData
 	) external returns (bytes32) {
-		// mapping(address => mapping(bytes32 => mapping(address => bool))) private _approvalByPartition;
 		require(_approvalByPartition[from][partition][msg.sender], "ERC1410: Not authorized operator");
 		_transferByPartition(partition, msg.sender, from, to, amount, data, operatorData);
 		return partition;
@@ -294,6 +279,7 @@ contract ERC1410 is IERC1410, ERC165 {
 		uint256 value,
 		bytes memory data
 	) public virtual override returns (bytes32) {
+		//validate data
 		_transferByPartition(partition, msg.sender, msg.sender, to, value, data, "");
 		return partition;
 	}
@@ -321,7 +307,21 @@ contract ERC1410 is IERC1410, ERC165 {
 		bytes memory operatorData
 	) internal virtual {
 		require(_balancesByPartition[from][partition] >= value, "ERC1410: transfer amount exceeds balance");
+		require(to != address(0), "ERC1410: transfer to the zero address");
+
 		_balancesByPartition[from][partition] -= value;
+
+		if (_balancesByPartition[from][partition] == 0) {
+			bytes32[] memory partitions = _partitionsOf[from];
+			uint256 index = _partitionIndexOfUser[from][partition];
+			_partitionsOf[from][index] = partitions[partitions.length - 1];
+			_partitionsOf[from].pop();
+		}
+		if (!_isUserPartion(partition, to)) {
+			_partitionIndexOfUser[to][partition] = _partitionsOf[to].length;
+			_partitionsOf[to].push(partition);
+		}
+
 		_balancesByPartition[to][partition] += value;
 		emit TransferByPartition(partition, operator, from, to, value, data, operatorData);
 	}
