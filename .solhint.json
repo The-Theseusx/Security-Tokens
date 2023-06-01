@@ -3,6 +3,7 @@
 	"rules": {
 		"compiler-version": false,
 		"no-empty-blocks": false,
-		"not-rely-on-time": false
+		"not-rely-on-time": false,
+		"reason-string": false
 	}
 }

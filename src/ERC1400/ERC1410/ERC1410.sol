@@ -2,13 +2,42 @@
 pragma solidity ^0.8.0;
 
 import { Ownable2Step } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
+import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import { ERC165 } from "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
 import { IERC1410 } from "./IERC1410.sol";
+import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 
-contract ERC1410 is IERC1410, ERC165, Ownable2Step {
+contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 	/**
 	 * @dev partitioning is to group tokens into different buckets though the underlying token contract is one.
 	 */
+
+	/**
+	 * @dev EIP712 typehash for data validation
+	 */
+	bytes32 public constant ERC1410_DATA_VALIDATION_HASH =
+		keccak256("ERC1410ValidateData(address from,address to,uint256 amount,bytes32 partition,bytes32 operatorData)");
+
+	/**
+	 * @dev EIP712 typehash for document validation
+	 */
+	bytes32 public constant ERC1410_DOCUMENT_VALIDATION_HASH =
+		keccak256("ERC1410ValidateDocument(bytes32 name,bytes32 uri,bytes32 documentHash)");
+
+	/**
+	 * @dev token name
+	 */
+	string private _name;
+
+	/**
+	 * @dev token symbol
+	 */
+	string private _symbol;
+
+	/**
+	 * @dev token contract version for EI712
+	 */
+	string private _version;
 
 	/**
 	 * @dev token total suppply irrespective of partition.
@@ -76,6 +105,12 @@ contract ERC1410 is IERC1410, ERC165, Ownable2Step {
 	 * @notice operators can spend tokens on behalf of users irrespective of _allowance as long as this mapping is true.
 	 */
 	mapping(address => mapping(address => bool)) private _approval;
+
+	constructor(string memory name_, string memory symbol_, string memory version_) EIP712(name_, version_) {
+		_name = name_;
+		_symbol = symbol_;
+		_version = version_;
+	}
 
 	function totalSupply() public view virtual override returns (uint256) {
 		return _totalSupply;
@@ -163,16 +198,11 @@ contract ERC1410 is IERC1410, ERC165, Ownable2Step {
 		uint256 amount,
 		bytes calldata data
 	) external override onlyOwner {
-		_issueByPartition(partition, msg.sender, account, amount, data);
+		require(partition != bytes32(0), "ERC1410: Invalid partition (empty)");
+		_issueByPartition(partition, account, amount, data);
 	}
 
-	function _issueByPartition(
-		bytes32 partition,
-		address operator,
-		address account,
-		uint256 amount,
-		bytes memory data
-	) internal virtual {
+	function _issueByPartition(bytes32 partition, address account, uint256 amount, bytes memory data) internal virtual {
 		//require(_isIssuablePartition(partition, amount), "ERC1410: Not issuable partition");
 		//_beforeTokenTransfer(operator, address(0), account, amount, data, "");
 		_totalSupply += amount;
@@ -187,12 +217,11 @@ contract ERC1410 is IERC1410, ERC165, Ownable2Step {
 	function _isUserPartion(bytes32 partition, address user) internal view returns (bool) {
 		bytes32[] memory partitions = _partitionsOf[user];
 		uint256 index = _partitionIndexOfUser[user][partition];
-		if (index == 0 && partitions[0] != partition) return false;
-		return true;
+		return partition == partitions[index];
 	}
 
 	function _addTokenToPartitionList(bytes32 partition, address account, uint256 amount) internal virtual {
-		bytes32[] memory partitions = _partitionsOf[account];
+		bytes32[] memory partitions = _partitions;
 		uint256 index = _partitionIndex[partition];
 
 		bytes32 currentPartition = partitions[index];
@@ -230,7 +259,12 @@ contract ERC1410 is IERC1410, ERC165, Ownable2Step {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
+		///@dev basically a burn operation, maybe separate burn logic to a separate function
 		//_beforeTokenTransfer(operator, account, address(0), amount, data, operatorData);
+		//validate data and operatorData
+		require(_balancesByPartition[account][partition] >= amount, "ERC1410: Not enough balance");
+		require(_approvalByPartition[account][partition][operator], "ERC1410: Not authorized operator");
+
 		_balances[account] -= amount;
 		_balancesByPartition[account][partition] -= amount;
 		_totalSupply -= amount;
@@ -335,6 +369,20 @@ contract ERC1410 is IERC1410, ERC165, Ownable2Step {
 		//spend allowance
 		_transfer(msg.sender, from, to, value, "", "");
 		return true;
+	}
+
+	function _validateData(
+		address authorizer,
+		address from,
+		address to,
+		uint256 amount,
+		bytes calldata signature
+	) internal view virtual returns (bool) {
+		bytes32 structData = keccak256(abi.encodePacked(ERC1410_DATA_VALIDATION_HASH, from, to, amount));
+		bytes32 structDataHash = _hashTypedDataV4(structData);
+		address recoveredSigner = ECDSA.recover(structDataHash, signature);
+
+		return recoveredSigner == authorizer;
 	}
 
 	function _transfer(
