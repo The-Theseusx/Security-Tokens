@@ -2,6 +2,27 @@
 pragma solidity ^0.8.0;
 
 interface IERC1410 {
+	// Operator Events
+	event AuthorizedOperator(address indexed operator, address indexed tokenHolder);
+	event RevokedOperator(address indexed operator, address indexed tokenHolder);
+	event AuthorizedOperatorByPartition(
+		bytes32 indexed partition,
+		address indexed operator,
+		address indexed tokenHolder
+	);
+	event RevokedOperatorByPartition(bytes32 indexed partition, address indexed operator, address indexed tokenHolder);
+
+	// Issuance / Redemption Events
+	event IssuedByPartition(bytes32 indexed partition, address indexed to, uint256 amount, bytes data);
+	event RedeemedByPartition(
+		bytes32 indexed partition,
+		address indexed operator,
+		address indexed from,
+		uint256 amount,
+		bytes data,
+		bytes operatorData
+	);
+
 	// Token Information
 	function balanceOf(address account) external view returns (uint256);
 
@@ -70,27 +91,6 @@ interface IERC1410 {
 		address indexed from,
 		address indexed to,
 		uint256 amount,
-		bytes data,
-		bytes operatorData
-	);
-
-	// Operator Events
-	event AuthorizedOperator(address indexed operator, address indexed tokenHolder);
-	event RevokedOperator(address indexed operator, address indexed tokenHolder);
-	event AuthorizedOperatorByPartition(
-		bytes32 indexed partition,
-		address indexed operator,
-		address indexed tokenHolder
-	);
-	event RevokedOperatorByPartition(bytes32 indexed partition, address indexed operator, address indexed tokenHolder);
-
-	// Issuance / Redemption Events
-	event IssuedByPartition(bytes32 indexed partition, address indexed to, uint256 value, bytes data);
-	event RedeemedByPartition(
-		bytes32 indexed partition,
-		address indexed operator,
-		address indexed from,
-		uint256 value,
 		bytes data,
 		bytes operatorData
 	);
