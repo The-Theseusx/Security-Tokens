@@ -15,20 +15,10 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 	bytes32 public constant DEFAULT_PARTITION = bytes32(0);
 
 	/**
-	 * @dev partitioning is to group tokens into different buckets though the underlying token contract is one.
-	 */
-
-	/**
 	 * @dev EIP712 typehash for data validation
 	 */
 	bytes32 public constant ERC1410_DATA_VALIDATION_HASH =
 		keccak256("ERC1410ValidateData(address from,address to,uint256 amount,bytes32 partition,bytes32 operatorData)");
-
-	/**
-	 * @dev EIP712 typehash for document validation
-	 */
-	bytes32 public constant ERC1410_DOCUMENT_VALIDATION_HASH =
-		keccak256("ERC1410ValidateDocument(bytes32 name,bytes32 uri,bytes32 documentHash)");
 
 	/**
 	 * @dev token name
@@ -41,7 +31,7 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 	string private _symbol;
 
 	/**
-	 * @dev token contract version for EI712
+	 * @dev token contract version for EIP712
 	 */
 	string private _version;
 
@@ -171,6 +161,9 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		return _balancesByPartition[account][DEFAULT_PARTITION];
 	}
 
+	/**
+	 * @dev returns the allowance of a spender on the default partition.
+	 */
 	function allowance(address owner, address spender) public view virtual returns (uint256) {
 		return _allowanceByPartition[owner][DEFAULT_PARTITION][spender];
 	}
@@ -248,7 +241,7 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 	function _issueByPartition(bytes32 partition, address account, uint256 amount, bytes memory data) internal virtual {
 		require(account != address(0), "ERC1410: Invalid recipient (zero address)");
 
-		_beforeTokenTransferWithData(address(0), account, amount, data, "");
+		_beforeTokenTransfer(partition, msg.sender, address(0), account, amount, data, "");
 		_totalSupply += amount;
 		unchecked {
 			_totalSupplyByPartition[partition] += amount;
@@ -258,7 +251,7 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		_addTokenToPartitionList(partition, account);
 
 		emit IssuedByPartition(partition, account, amount, data);
-		_afterTokenTransferWithData(address(0), account, amount, data, "");
+		_afterTokenTransfer(partition, msg.sender, address(0), account, amount, data, "");
 	}
 
 	// function issue(address account, uint256 amount, bytes calldata data) external override onlyOwner {
@@ -268,8 +261,8 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 	function _issue(address account, uint256 amount, bytes memory data) internal virtual {
 		require(account != address(0), "ERC1410: Invalid recipient (zero address)");
 
+		_beforeTokenTransfer(DEFAULT_PARTITION, msg.sender, address(0), account, amount, data, "");
 		//validate data
-		_beforeTokenTransferWithData(address(0), account, amount, data, "");
 		_totalSupply += amount;
 		unchecked {
 			_balances[account] += amount;
@@ -278,6 +271,7 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		}
 
 		//emit Issued(address(0), account, amount, data);
+		_afterTokenTransfer(DEFAULT_PARTITION, msg.sender, address(0), account, amount, data, "");
 	}
 
 	function isUserPartition(bytes32 partition, address user) public view returns (bool) {
@@ -325,10 +319,13 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
-		_beforeTokenTransferWithData(account, address(0), amount, data, operatorData);
+		_beforeTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
 		//validate data and operatorData
 		require(_balancesByPartition[account][partition] >= amount, "ERC1410: Not enough balance");
-		require(_approvalByPartition[account][partition][operator], "ERC1410: Not authorized operator");
+		require(
+			_approvalByPartition[account][partition][operator] || operator == account,
+			"ERC1410: Not authorized operator or owner"
+		);
 
 		_balances[account] -= amount;
 		_balancesByPartition[account][partition] -= amount;
@@ -336,9 +333,17 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		_totalSupplyByPartition[partition] -= amount;
 
 		emit RedeemedByPartition(partition, operator, account, amount, data, operatorData);
-		_afterTokenTransferWithData(account, address(0), amount, data, operatorData);
+		_afterTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
 	}
 
+	/**
+	address operator,
+		address from,
+		address to,
+		uint256 amount,
+		bytes memory data,
+		bytes memory operatorData
+ */
 	// function redeemFromByPartition(
 	// 	bytes32 partition,
 	// 	address from,
@@ -431,17 +436,20 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
+		require(partition != bytes32(0), "ERC1410: Invalid partition (DEFAULT_PARTITION)");
 		require(_balancesByPartition[from][partition] >= amount, "ERC1410: transfer amount exceeds balance");
 		require(to != address(0), "ERC1410: transfer to the zero address");
 
+		_beforeTokenTransfer(partition, operator, from, to, amount, data, operatorData);
 		_balancesByPartition[from][partition] -= amount;
 
-		if (_balancesByPartition[from][partition] == 0) {
-			bytes32[] memory partitions = _partitionsOf[from];
-			uint256 index = _partitionIndexOfUser[from][partition];
-			_partitionsOf[from][index] = partitions[partitions.length - 1];
-			_partitionsOf[from].pop();
-		}
+		///@dev is this necessary? if the user has no balance in this partition, no need to remove it from the list as no transfer can be done either way.
+		// if (_balancesByPartition[from][partition] == 0) {
+		// 	bytes32[] memory partitions = _partitionsOf[from];
+		// 	uint256 index = _partitionIndexOfUser[from][partition];
+		// 	_partitionsOf[from][index] = partitions[partitions.length - 1];
+		// 	_partitionsOf[from].pop();
+		// }
 		if (!isUserPartition(partition, to)) {
 			_partitionIndexOfUser[to][partition] = _partitionsOf[to].length;
 			_partitionsOf[to].push(partition);
@@ -449,6 +457,8 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 
 		_balancesByPartition[to][partition] += amount;
 		emit TransferByPartition(partition, operator, from, to, amount, data, operatorData);
+
+		_afterTokenTransfer(partition, operator, from, to, amount, data, operatorData);
 	}
 
 	function transfer(address to, uint256 amount) public virtual returns (bool) {
@@ -503,15 +513,15 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		require(_balancesByPartition[from][DEFAULT_PARTITION] >= amount, "ERC1410: transfer amount exceeds balance");
 		require(to != address(0), "ERC1410: transfer to the zero address");
 
-		_beforeTokenTransfer(operator, from, to, amount);
+		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 		_balancesByPartition[from][DEFAULT_PARTITION] -= amount;
 		_balances[from] -= amount;
 
 		_balancesByPartition[to][DEFAULT_PARTITION] += amount;
 		_balances[to] += amount;
-
-		_afterTokenTransfer(operator, from, to, amount, data, operatorData);
 		//emit Transfer(operator, from, to, amount, data, operatorData);
+
+		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 	}
 
 	function approve(address spender, uint256 amount) public virtual returns (bool) {
@@ -550,7 +560,7 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		address spender,
 		uint256 addedValue
 	) public virtual returns (bool) {
-		require(partition != DEFAULT_PARTITION, "ERC1410: increaseAllowanceByPartition default partition");
+		require(partition != DEFAULT_PARTITION, "ERC1410: not default partition");
 		_approveByPartition(
 			partition,
 			msg.sender,
@@ -565,7 +575,7 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		address spender,
 		uint256 subtractedValue
 	) public virtual returns (bool) {
-		require(partition != DEFAULT_PARTITION, "ERC1410: decreaseAllowanceByPartition default partition");
+		require(partition != DEFAULT_PARTITION, "ERC1410: not default partition");
 		_approveByPartition(
 			partition,
 			msg.sender,
@@ -575,9 +585,8 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		return true;
 	}
 
-	function _beforeTokenTransfer(address operator, address from, address to, uint256 amount) internal virtual {}
-
-	function _afterTokenTransfer(
+	function _beforeTokenTransfer(
+		bytes32 partition,
 		address operator,
 		address from,
 		address to,
@@ -586,50 +595,17 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		bytes memory operatorData
 	) internal virtual {}
 
-	// function _mint(address account, uint256 amount, bytes memory data, bytes memory operatorData) internal virtual {
-	// 	_balances[account] += amount;
-	// 	// emit Minted(operator, account, amount, data, operatorData);
-	// 	// emit Transfer(address(0), account, amount, data, operatorData);
-	// }
-
-	// function _burn(address account, uint256 amount, bytes memory data, bytes memory operatorData) internal virtual {
-	// 	require(_balances[account] >= amount, "ERC1410: burn amount exceeds balance");
-	// 	_balances[account] -= amount;
-	// 	// emit Burned(operator, account, amount, data, operatorData);
-	// 	// emit Transfer(account, address(0), amount, data, operatorData);
-	// }
+	function _afterTokenTransfer(
+		bytes32 partition,
+		address operator,
+		address from,
+		address to,
+		uint256 amount,
+		bytes memory data,
+		bytes memory operatorData
+	) internal virtual {}
 
 	function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
 		return interfaceId == type(IERC1410).interfaceId || super.supportsInterface(interfaceId);
 	}
-
-	function _beforeTokenTransferWithData(
-		address from,
-		address to,
-		uint256 amount,
-		bytes memory data,
-		bytes memory operatorData
-	) internal virtual {}
-
-	/**
-	 * @dev Hook that is called after any transfer of tokens with data. This includes
-	 * issuing and redeeming.
-	 *
-	 * Calling conditions:
-	 *
-	 * - when `from` and `to` are both non-zero, `amount` of ``from``'s tokens
-	 * has been transferred to `to`.
-	 * - when `from` is zero, `amount` tokens have been issued for `to`.
-	 * - when `to` is zero, `amount` of ``from``'s tokens have been redeemed.
-	 * - `from` and `to` are never both zero.
-	 *
-	 * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
-	 */
-	function _afterTokenTransferWithData(
-		address from,
-		address to,
-		uint256 amount,
-		bytes memory data,
-		bytes memory operatorData
-	) internal virtual {}
 }
