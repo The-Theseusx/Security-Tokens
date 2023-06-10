@@ -96,6 +96,26 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 	 */
 	mapping(address => mapping(address => bool)) private _approval;
 
+	event Transfer(
+		address operator,
+		address indexed from,
+		address indexed to,
+		uint256 amount,
+		bytes32 indexed partition,
+		bytes data,
+		bytes operatorData
+	);
+
+	event Approval(address indexed owner, address indexed spender, uint256 amount, bytes32 indexed partition);
+
+	event Issued(
+		address indexed issuer,
+		address indexed to,
+		uint256 amount,
+		bytes32 indexed partition,
+		bytes32 operatorData
+	);
+
 	constructor(string memory name_, string memory symbol_, string memory version_) EIP712(name_, version_) {
 		_name = name_;
 		_symbol = symbol_;
@@ -149,6 +169,9 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		return _totalPartitions;
 	}
 
+	/**
+	 * @dev get the total token balance of a user irrespective of partition.
+	 */
 	function balanceOf(address account) public view virtual override returns (uint256) {
 		return _balances[account];
 	}
@@ -192,6 +215,12 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		return _approvalByPartition[account][partition][operator];
 	}
 
+	/**
+	 * Error messages:
+	 * IP: Invalid partition
+	 * IPB: Insufficient partition balance
+	 * IR: Receiver is invalid
+	 */
 	function canTransferByPartition(
 		address from,
 		address to,
@@ -238,40 +267,8 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		_issueByPartition(partition, account, amount, data);
 	}
 
-	function _issueByPartition(bytes32 partition, address account, uint256 amount, bytes memory data) internal virtual {
-		require(account != address(0), "ERC1410: Invalid recipient (zero address)");
-
-		_beforeTokenTransfer(partition, msg.sender, address(0), account, amount, data, "");
-		_totalSupply += amount;
-		unchecked {
-			_totalSupplyByPartition[partition] += amount;
-			_balances[account] += amount;
-			_balancesByPartition[account][partition] += amount;
-		}
-		_addTokenToPartitionList(partition, account);
-
-		emit IssuedByPartition(partition, account, amount, data);
-		_afterTokenTransfer(partition, msg.sender, address(0), account, amount, data, "");
-	}
-
-	// function issue(address account, uint256 amount, bytes calldata data) external override onlyOwner {
-	// 	_issue(account, amount, data);
-	// }
-
-	function _issue(address account, uint256 amount, bytes memory data) internal virtual {
-		require(account != address(0), "ERC1410: Invalid recipient (zero address)");
-
-		_beforeTokenTransfer(DEFAULT_PARTITION, msg.sender, address(0), account, amount, data, "");
-		//validate data
-		_totalSupply += amount;
-		unchecked {
-			_balances[account] += amount;
-			_balancesByPartition[account][DEFAULT_PARTITION] += amount; ///@dev tokens without partition are assigned to the global partition (0)
-			_totalSupplyByPartition[DEFAULT_PARTITION] += amount;
-		}
-
-		//emit Issued(address(0), account, amount, data);
-		_afterTokenTransfer(DEFAULT_PARTITION, msg.sender, address(0), account, amount, data, "");
+	function issue(address account, uint256 amount, bytes calldata data) external onlyOwner {
+		_issue(account, amount, data);
 	}
 
 	function isUserPartition(bytes32 partition, address user) public view returns (bool) {
@@ -280,79 +277,9 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		return partition == partitions[index];
 	}
 
-	function _addTokenToPartitionList(bytes32 partition, address account) internal virtual {
-		bytes32[] memory partitions = _partitions;
-		uint256 index = _partitionIndex[partition];
-
-		bytes32 currentPartition = partitions[index];
-
-		if (partition != currentPartition) {
-			///partition does not exist
-
-			//add partition to contract
-			_partitionIndex[partition] = partitions.length;
-			_partitions.push(partition);
-			_totalPartitions += 1;
-
-			//add partition to user
-			_partitionIndexOfUser[account][partition] = _partitionsOf[account].length;
-			_partitionsOf[account].push(partition);
-		} else {
-			///partition exists
-
-			if (!isUserPartition(partition, account)) {
-				_partitionIndexOfUser[account][partition] = _partitionsOf[account].length;
-				_partitionsOf[account].push(partition);
-			}
-		}
-	}
-
 	function redeemByPartition(bytes32 partition, uint256 amount, bytes calldata data) external override {
 		_redeemByPartition(partition, msg.sender, msg.sender, amount, data, "");
 	}
-
-	function _redeemByPartition(
-		bytes32 partition,
-		address operator,
-		address account,
-		uint256 amount,
-		bytes memory data,
-		bytes memory operatorData
-	) internal virtual {
-		_beforeTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
-		//validate data and operatorData
-		require(_balancesByPartition[account][partition] >= amount, "ERC1410: Not enough balance");
-		require(
-			_approvalByPartition[account][partition][operator] || operator == account,
-			"ERC1410: Not authorized operator or owner"
-		);
-
-		_balances[account] -= amount;
-		_balancesByPartition[account][partition] -= amount;
-		_totalSupply -= amount;
-		_totalSupplyByPartition[partition] -= amount;
-
-		emit RedeemedByPartition(partition, operator, account, amount, data, operatorData);
-		_afterTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
-	}
-
-	/**
-	address operator,
-		address from,
-		address to,
-		uint256 amount,
-		bytes memory data,
-		bytes memory operatorData
- */
-	// function redeemFromByPartition(
-	// 	bytes32 partition,
-	// 	address from,
-	// 	uint256 amount,
-	// 	bytes calldata data,
-	// 	bytes calldata operatorData
-	// ) external onlyOwner virtual {
-	// 	_redeemByPartition(partition, msg.sender, from, amount, data, operatorData);
-	// }
 
 	function operatorRedeemByPartition(
 		bytes32 partition,
@@ -373,6 +300,7 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		bytes calldata operatorData
 	) external virtual override returns (bytes32) {
 		require(_approvalByPartition[from][partition][msg.sender], "ERC1410: Not authorized operator");
+		//validate operator data
 		_transferByPartition(partition, msg.sender, from, to, amount, data, operatorData);
 		return partition;
 	}
@@ -388,43 +316,171 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		return partition;
 	}
 
-	function _spendAllowance(address owner, address spender, uint256 amount) internal virtual {
-		uint256 currentAllowance = allowance(owner, spender);
-		if (currentAllowance != type(uint256).max) {
-			require(currentAllowance >= amount, "ERC1410: insufficient allowance");
-			unchecked {
-				_approve(owner, spender, currentAllowance - amount);
-			}
-		}
-	}
-
-	function _spendAllowanceByPartition(
-		bytes32 partition,
-		address owner,
-		address spender,
-		uint256 amount
-	) internal virtual {
-		uint256 currentAllowance = allowanceByPartition(partition, owner, spender);
-		if (currentAllowance != type(uint256).max) {
-			require(currentAllowance >= amount, "ERC1410: insufficient partition allowance");
-			unchecked {
-				_approveByPartition(partition, owner, spender, currentAllowance - amount);
-			}
-		}
-	}
-
 	function transferFromByPartition(
 		bytes32 partition,
 		address from,
 		address to,
 		uint256 amount,
+		bytes memory data
+	) public virtual returns (bytes32) {
+		//validate data
+		_spendAllowanceByPartition(partition, from, msg.sender, amount);
+		_transferByPartition(partition, msg.sender, from, to, amount, data, "");
+		return partition;
+	}
+
+	function transfer(address to, uint256 amount) public virtual returns (bool) {
+		_transfer(msg.sender, msg.sender, to, amount, "", "");
+		return true;
+	}
+
+	function transferWithData(address to, uint256 amount, bytes memory data) public virtual returns (bool) {
+		require(data.length != 0, "ERC1410: Invalid data");
+		_transfer(msg.sender, msg.sender, to, amount, data, "");
+		return true;
+	}
+
+	function transferFrom(address from, address to, uint256 amount) public virtual returns (bool) {
+		_spendAllowance(from, msg.sender, amount);
+		_transfer(msg.sender, from, to, amount, "", "");
+		return true;
+	}
+
+	function transferFromWithData(
+		address from,
+		address to,
+		uint256 amount,
+		bytes memory data
+	) public virtual returns (bool) {
+		require(data.length != 0, "ERC1410: Invalid data");
+		_spendAllowance(from, msg.sender, amount);
+		_transfer(msg.sender, from, to, amount, data, "");
+		return true;
+	}
+
+	function approve(address spender, uint256 amount) public virtual returns (bool) {
+		_approve(msg.sender, spender, amount);
+		return true;
+	}
+
+	function increaseAllowance(address spender, uint256 addedValue) public virtual returns (bool) {
+		_approve(msg.sender, spender, _allowanceByPartition[msg.sender][DEFAULT_PARTITION][spender] + addedValue);
+		return true;
+	}
+
+	function decreaseAllowance(address spender, uint256 subtractedValue) public virtual returns (bool) {
+		_approve(msg.sender, spender, _allowanceByPartition[msg.sender][DEFAULT_PARTITION][spender] - subtractedValue);
+		return true;
+	}
+
+	function approveByPartition(bytes32 partition, address spender, uint256 amount) public virtual returns (bool) {
+		require(partition != DEFAULT_PARTITION, "ERC1410: approveByPartition default partition");
+		_approveByPartition(partition, msg.sender, spender, amount);
+		return true;
+	}
+
+	function increaseAllowanceByPartition(
+		bytes32 partition,
+		address spender,
+		uint256 addedValue
+	) public virtual returns (bool) {
+		require(partition != DEFAULT_PARTITION, "ERC1410: not default partition");
+		_approveByPartition(
+			partition,
+			msg.sender,
+			spender,
+			_allowanceByPartition[msg.sender][partition][spender] + addedValue
+		);
+		return true;
+	}
+
+	function decreaseAllowanceByPartition(
+		bytes32 partition,
+		address spender,
+		uint256 subtractedValue
+	) public virtual returns (bool) {
+		require(partition != DEFAULT_PARTITION, "ERC1410: not default partition");
+		_approveByPartition(
+			partition,
+			msg.sender,
+			spender,
+			_allowanceByPartition[msg.sender][partition][spender] - subtractedValue
+		);
+		return true;
+	}
+
+	function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+		return interfaceId == type(IERC1410).interfaceId || super.supportsInterface(interfaceId);
+	}
+
+	// --------------------------------------------------------------- INTERNAL FUNCTIONS ---------------------------------------------------------------
+	function _validateData(
+		address authorizer,
+		address from,
+		address to,
+		uint256 amount,
+		bytes calldata signature
+	) internal view virtual returns (bool) {
+		///@dev prevent replay attacks...
+		bytes32 structData = keccak256(abi.encodePacked(ERC1410_DATA_VALIDATION_HASH, from, to, amount));
+		bytes32 structDataHash = _hashTypedDataV4(structData);
+		address recoveredSigner = ECDSA.recover(structDataHash, signature);
+
+		return recoveredSigner == authorizer;
+	}
+
+	function _transfer(
+		address operator,
+		address from,
+		address to,
+		uint256 amount,
 		bytes memory data,
 		bytes memory operatorData
-	) public virtual returns (bytes32) {
-		//spend allowance
-		_spendAllowanceByPartition(partition, from, msg.sender, amount);
-		_transferByPartition(partition, msg.sender, from, to, amount, data, operatorData);
-		return partition;
+	) internal virtual {
+		require(_balancesByPartition[from][DEFAULT_PARTITION] >= amount, "ERC1410: transfer amount exceeds balance");
+		require(to != address(0), "ERC1410: transfer to the zero address");
+
+		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
+		_balancesByPartition[from][DEFAULT_PARTITION] -= amount;
+		_balances[from] -= amount;
+
+		_balancesByPartition[to][DEFAULT_PARTITION] += amount;
+		_balances[to] += amount;
+		emit Transfer(operator, from, to, amount, DEFAULT_PARTITION, data, operatorData);
+
+		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
+	}
+
+	function _issueByPartition(bytes32 partition, address account, uint256 amount, bytes memory data) internal virtual {
+		require(account != address(0), "ERC1410: Invalid recipient (zero address)");
+
+		_beforeTokenTransfer(partition, msg.sender, address(0), account, amount, data, "");
+		_totalSupply += amount;
+		unchecked {
+			_totalSupplyByPartition[partition] += amount;
+			_balances[account] += amount;
+			_balancesByPartition[account][partition] += amount;
+		}
+		_addTokenToPartitionList(partition, account);
+
+		emit IssuedByPartition(partition, account, amount, data);
+		_afterTokenTransfer(partition, msg.sender, address(0), account, amount, data, "");
+	}
+
+	function _issue(address account, uint256 amount, bytes memory data) internal virtual {
+		require(account != address(0), "ERC1410: Invalid recipient (zero address)");
+
+		_beforeTokenTransfer(DEFAULT_PARTITION, msg.sender, address(0), account, amount, data, "");
+		//validate data
+		_totalSupply += amount;
+		unchecked {
+			_balances[account] += amount;
+			_balancesByPartition[account][DEFAULT_PARTITION] += amount; ///@dev tokens without partition are assigned to the global partition (0)
+			_totalSupplyByPartition[DEFAULT_PARTITION] += amount;
+		}
+
+		//emit Issued(address(0), account, amount, data);
+		_afterTokenTransfer(DEFAULT_PARTITION, msg.sender, address(0), account, amount, data, "");
 	}
 
 	function _transferByPartition(
@@ -461,128 +517,91 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		_afterTokenTransfer(partition, operator, from, to, amount, data, operatorData);
 	}
 
-	function transfer(address to, uint256 amount) public virtual returns (bool) {
-		_transfer(msg.sender, msg.sender, to, amount, "", "");
-		return true;
-	}
-
-	function transferWithData(address to, uint256 amount, bytes memory data) public virtual returns (bool) {
-		_transfer(msg.sender, msg.sender, to, amount, data, "");
-		return true;
-	}
-
-	function transferFrom(address from, address to, uint256 amount) public virtual returns (bool) {
-		_spendAllowance(from, msg.sender, amount);
-		_transfer(msg.sender, from, to, amount, "", "");
-		return true;
-	}
-
-	function transferFromWithData(
-		address from,
-		address to,
-		uint256 amount,
-		bytes memory data
-	) public virtual returns (bool) {
-		_spendAllowance(from, msg.sender, amount);
-		_transfer(msg.sender, from, to, amount, data, "");
-		return true;
-	}
-
-	function _validateData(
-		address authorizer,
-		address from,
-		address to,
-		uint256 amount,
-		bytes calldata signature
-	) internal view virtual returns (bool) {
-		bytes32 structData = keccak256(abi.encodePacked(ERC1410_DATA_VALIDATION_HASH, from, to, amount));
-		bytes32 structDataHash = _hashTypedDataV4(structData);
-		address recoveredSigner = ECDSA.recover(structDataHash, signature);
-
-		return recoveredSigner == authorizer;
-	}
-
-	function _transfer(
+	function _redeemByPartition(
+		bytes32 partition,
 		address operator,
-		address from,
-		address to,
+		address account,
 		uint256 amount,
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
-		require(_balancesByPartition[from][DEFAULT_PARTITION] >= amount, "ERC1410: transfer amount exceeds balance");
-		require(to != address(0), "ERC1410: transfer to the zero address");
+		_beforeTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
+		//validate data and operatorData
+		require(_balancesByPartition[account][partition] >= amount, "ERC1410: Not enough balance");
+		require(
+			_approvalByPartition[account][partition][operator] || operator == account,
+			"ERC1410: Not authorized operator or owner"
+		);
 
-		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
-		_balancesByPartition[from][DEFAULT_PARTITION] -= amount;
-		_balances[from] -= amount;
+		_balances[account] -= amount;
+		_balancesByPartition[account][partition] -= amount;
+		_totalSupply -= amount;
+		_totalSupplyByPartition[partition] -= amount;
 
-		_balancesByPartition[to][DEFAULT_PARTITION] += amount;
-		_balances[to] += amount;
-		//emit Transfer(operator, from, to, amount, data, operatorData);
-
-		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
+		emit RedeemedByPartition(partition, operator, account, amount, data, operatorData);
+		_afterTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
 	}
 
-	function approve(address spender, uint256 amount) public virtual returns (bool) {
-		_approve(msg.sender, spender, amount);
-		return true;
+	function _addTokenToPartitionList(bytes32 partition, address account) internal virtual {
+		bytes32[] memory partitions = _partitions;
+		uint256 index = _partitionIndex[partition];
+
+		bytes32 currentPartition = partitions[index];
+
+		if (partition != currentPartition) {
+			///partition does not exist
+
+			//add partition to contract
+			_partitionIndex[partition] = partitions.length;
+			_partitions.push(partition);
+			_totalPartitions += 1;
+
+			//add partition to user
+			_partitionIndexOfUser[account][partition] = _partitionsOf[account].length;
+			_partitionsOf[account].push(partition);
+		} else {
+			///partition exists
+
+			if (!isUserPartition(partition, account)) {
+				_partitionIndexOfUser[account][partition] = _partitionsOf[account].length;
+				_partitionsOf[account].push(partition);
+			}
+		}
 	}
 
 	function _approve(address owner, address spender, uint256 amount) internal virtual {
 		_approveByPartition(DEFAULT_PARTITION, owner, spender, amount);
-		//emit Approval(owner, spender, amount);
-	}
-
-	function increaseAllowance(address spender, uint256 addedValue) public virtual returns (bool) {
-		_approve(msg.sender, spender, _allowanceByPartition[msg.sender][DEFAULT_PARTITION][spender] + addedValue);
-		return true;
-	}
-
-	function decreaseAllowance(address spender, uint256 subtractedValue) public virtual returns (bool) {
-		_approve(msg.sender, spender, _allowanceByPartition[msg.sender][DEFAULT_PARTITION][spender] - subtractedValue);
-		return true;
-	}
-
-	function approveByPartition(bytes32 partition, address spender, uint256 amount) public virtual returns (bool) {
-		require(partition != DEFAULT_PARTITION, "ERC1410: approveByPartition default partition");
-		_approveByPartition(partition, msg.sender, spender, amount);
-		return true;
+		emit Approval(owner, spender, amount, DEFAULT_PARTITION);
 	}
 
 	function _approveByPartition(bytes32 partition, address owner, address spender, uint256 amount) internal virtual {
 		_allowanceByPartition[owner][partition][spender] = amount;
-		//emit ApprovalByPartition(partition, owner, spender, amount);
+		emit Approval(owner, spender, amount, partition);
 	}
 
-	function increaseAllowanceByPartition(
-		bytes32 partition,
-		address spender,
-		uint256 addedValue
-	) public virtual returns (bool) {
-		require(partition != DEFAULT_PARTITION, "ERC1410: not default partition");
-		_approveByPartition(
-			partition,
-			msg.sender,
-			spender,
-			_allowanceByPartition[msg.sender][partition][spender] + addedValue
-		);
-		return true;
+	function _spendAllowance(address owner, address spender, uint256 amount) internal virtual {
+		uint256 currentAllowance = allowance(owner, spender);
+		if (currentAllowance != type(uint256).max) {
+			require(currentAllowance >= amount, "ERC1410: insufficient allowance");
+			unchecked {
+				_approve(owner, spender, currentAllowance - amount);
+			}
+		}
 	}
 
-	function decreaseAllowanceByPartition(
+	function _spendAllowanceByPartition(
 		bytes32 partition,
+		address owner,
 		address spender,
-		uint256 subtractedValue
-	) public virtual returns (bool) {
-		require(partition != DEFAULT_PARTITION, "ERC1410: not default partition");
-		_approveByPartition(
-			partition,
-			msg.sender,
-			spender,
-			_allowanceByPartition[msg.sender][partition][spender] - subtractedValue
-		);
-		return true;
+		uint256 amount
+	) internal virtual {
+		uint256 currentAllowance = allowanceByPartition(partition, owner, spender);
+		if (currentAllowance != type(uint256).max) {
+			require(currentAllowance >= amount, "ERC1410: insufficient partition allowance");
+			unchecked {
+				_approveByPartition(partition, owner, spender, currentAllowance - amount);
+			}
+		}
 	}
 
 	function _beforeTokenTransfer(
@@ -604,8 +623,4 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {}
-
-	function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
-		return interfaceId == type(IERC1410).interfaceId || super.supportsInterface(interfaceId);
-	}
 }
