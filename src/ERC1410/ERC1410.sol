@@ -164,7 +164,7 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		return _totalSupply;
 	}
 
-	/**token supply of
+	/**
 	 * @return the total number of tokens issued from a given partition, default partition inclusive.
 	 */
 	function totalSupplyByPartition(bytes32 partition) public view virtual returns (uint256) {
