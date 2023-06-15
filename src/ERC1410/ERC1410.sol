@@ -338,9 +338,10 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 
 	/**
 	 * @notice allows a user to revoke all the rights of their operators in a single transaction.
+	 * @notice this will revoke ALL operator rights for ALL partitions of msg.sender.
 	 * @param operators addresses to revoke as operators for caller.
 	 */
-	function revokeAllPartitionOperators(address[] calldata operators) public virtual {
+	function revokeOperators(address[] calldata operators) public virtual {
 		bytes32[] memory partitions = partitionsOf(msg.sender);
 		uint256 userPartitionCount = partitions.length;
 		uint256 operatorCount = operators.length;
