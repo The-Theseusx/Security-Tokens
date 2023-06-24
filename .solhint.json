@@ -5,6 +5,7 @@
 		"no-empty-blocks": false,
 		"not-rely-on-time": false,
 		"reason-string": false,
+		"max-states-count": false,
 		"no-unused-vars": "warn"
 	}
 }
