@@ -50,7 +50,7 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 	mapping(bytes32 => uint256) private _totalSupplyByPartition;
 
 	/**
-	 * @dev array of partitions.
+	 * @dev array of token partitions.
 	 */
 	bytes32[] private _partitions;
 
@@ -622,7 +622,7 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 
 	//TODO: Add on receive hook?
 
-	// --------------------------------------------------------------- INTERNAL FUNCTIONS ---------------------------------------------------------------
+	// --------------------------------------------------------------- INTERNAL FUNCTIONS --------------------------------------------------------------- //
 	function _validateData(
 		address authorizer,
 		address from,
