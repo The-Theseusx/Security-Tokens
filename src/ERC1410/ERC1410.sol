@@ -424,7 +424,7 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 	 * @param data redeem data.
 	 * @param operatorData additional data attached by the operator (if any)
 	 * @notice since msg.sender is supposed to be an authorized operator,
-	 * @param data and @param operatorData would be 0x unless the operator wishes to send additional metadata.
+	 * @param data and @param operatorData would be "" unless the operator wishes to send additional metadata.
 	 */
 	function operatorRedeemByPartition(
 		bytes32 partition,
@@ -794,7 +794,7 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 	}
 
 	/**
-	 * @dev called during issueByPartition
+	 * @dev called by issueByPartition
 	 * @notice internal function to update the contract token partition lists.
 	 */
 	function _addTokenToPartitionList(bytes32 partition, address account) internal virtual {
