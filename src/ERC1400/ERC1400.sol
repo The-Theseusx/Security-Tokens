@@ -3,14 +3,12 @@ pragma solidity ^0.8.0;
 
 import { Ownable2Step } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import { ERC1643 } from "../ERC1643/ERC1643.sol";
-
 import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/draft-EIP712.sol";
 import { IERC1400 } from "./IERC1400.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 
-//TODO: implement ERC1400. Inherit subcontracts and override or implement from scratch?
-
-//TODO: implement non-fungible version of ERC1400.
+//TODO: @dev add controllers and controllersByPartition
+//TODO: @dev review canTransfer functions
 contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	// --------------------------------------------------------------- CONSTANTS --------------------------------------------------------------- //
 	/**
@@ -345,13 +343,13 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	function canTransfer(
 		address to,
 		uint256 amount,
-		bytes calldata data
+		bytes calldata
 	) public view virtual override returns (bool, bytes memory, bytes32) {
-		if (balanceOf(msg.sender) < amount) return (false, bytes("0x52"), bytes32(0));
+		if (balanceOfNonPartitioned(msg.sender) < amount) return (false, bytes("0x52"), bytes32(0));
 		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
-		if (data.length != 0) {
-			//if (_validateData(owner(), msg.sender, to, amount, data)) return (true, bytes("0x51"), bytes32(0));
-		}
+		// if (data.length != 0) {
+		// 	if (_validateData(msg.sender, msg.sender, to, amount, DEFAULT_PARTITION, data)) return (true, bytes("0x51"), bytes32(0));
+		// }
 		return (true, bytes("0x51"), bytes32(0));
 	}
 
@@ -365,6 +363,11 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		bytes calldata data
 	) public view virtual override returns (bool, bytes memory, bytes32) {
 		if (amount > allowance(from, msg.sender)) return (false, bytes("0x53"), bytes32(0));
+		if (data.length != 0) {
+			if (!_validateData(owner(), from, to, amount, DEFAULT_PARTITION, data)) {
+				return (false, bytes("0x5f"), bytes32(0));
+			}
+		}
 		return canTransfer(to, amount, data);
 	}
 
@@ -448,7 +451,8 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		uint256 amount,
 		bytes calldata data
 	) public virtual override {
-		_spendAllowance(from, msg.sender, amount);
+		require(_validateData(owner(), from, to, amount, DEFAULT_PARTITION, data), "ERC1400: Invalid data");
+		++_userNonce[owner()];
 		_transferWithData(msg.sender, from, to, amount, data, "");
 	}
 
@@ -587,7 +591,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	/**
 	 * @notice authorize an operator to use msg.sender's tokens of a given partition.
 	 * @notice this grants permission to the operator to transfer tokens of msg.sender for a given partition.
-	 * @notice this includes burning tokens on behalf of the token holder.
+	 * @notice this includes burning tokens of @param partition on behalf of the token holder.
 	 * @param partition the token partition.
 	 * @param operator address to authorize as operator for caller.
 	 */
@@ -662,8 +666,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	 * @param amount the amount of tokens to issue.
 	 * @param data additional data attached to the issue.
 	 */
-	function issue(address account, uint256 amount, bytes calldata data) public virtual onlyOwner {
-		/**overide */
+	function issue(address account, uint256 amount, bytes calldata data) public virtual override onlyOwner {
 		_issue(account, amount, data);
 	}
 
@@ -725,6 +728,11 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		bytes calldata data,
 		bytes calldata operatorData
 	) public virtual override {
+		if (partition == DEFAULT_PARTITION) {
+			require(isOperator(msg.sender, account), "ERC1400: Not an operator");
+			_redeem(msg.sender, account, amount, data, operatorData);
+			return;
+		}
 		_redeemByPartition(partition, msg.sender, account, amount, data, operatorData);
 	}
 
@@ -759,6 +767,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		}
 		_beforeTokenTransfer(partition, operator, from, to, amount, data, operatorData);
 		_balancesByPartition[from][partition] -= amount;
+		_balances[from] -= amount;
 
 		if (!isUserPartition(partition, to)) {
 			_partitionIndexOfUser[to][partition] = _partitionsOf[to].length;
@@ -766,6 +775,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		}
 
 		_balancesByPartition[to][partition] += amount;
+		_balances[to] += amount;
 		emit TransferByPartition(partition, operator, from, to, amount, data, operatorData);
 
 		_afterTokenTransfer(partition, operator, from, to, amount, data, operatorData);
@@ -971,12 +981,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	) internal virtual {
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, account, address(0), amount, data, operatorData);
 
-		//if (isOperatorFor(operator, account)), do not validate data else validate data
-		// if (operator != account) {
-		// 	require(isOperator(operator, account) || isOperatorForPartition(DEFAULT_PARTITION, operator, account), "ERC1400: caller is not an operator for holder");
-		// 	require(_validateData(owner(), account, address(0), amount, DEFAULT_PARTITION, data), "ERC1594: invalid data");
-		// }
-		//require(_validateData(owner(), account, address(0), amount, data), "ERC1594: invalid data");
+		require(_balancesByPartition[account][DEFAULT_PARTITION] >= amount, "ERC1400: Not enough funds");
 
 		_balances[account] -= amount;
 		_balancesByPartition[account][DEFAULT_PARTITION] -= amount;
@@ -1003,10 +1008,6 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
-		if (partition == DEFAULT_PARTITION) {
-			_redeem(operator, account, amount, data, operatorData);
-			return;
-		}
 		_beforeTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
 
 		require(_balancesByPartition[account][partition] >= amount, "ERC1400: Not enough balance");
