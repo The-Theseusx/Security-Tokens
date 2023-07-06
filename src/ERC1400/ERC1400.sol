@@ -27,7 +27,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	/**
 	 * @dev should track if token is issuable or not. Should not be modifiable if false.
 	 */
-	bool private _isIssuable = true;
+	bool private _isIssuable;
 
 	/**
 	 * @dev token name
@@ -65,9 +65,19 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	bytes32[] private _partitions;
 
 	/**
+	 * @dev array of token controllers.
+	 */
+	address[] private _controllers;
+
+	/**
 	 * @dev mapping of partition to index in _partitions array.
 	 */
 	mapping(bytes32 => uint256) private _partitionIndex;
+
+	/**
+	 * @dev mapping of controller to index in _controllers array.
+	 */
+	mapping(address => uint256) private _controllerIndex;
 
 	/**
 	 * @dev mapping from user to array of partitions.
@@ -97,13 +107,13 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	/**
 	 * @dev mapping of users to partition to operator to approved status of token transfer.
 	 */
-	mapping(address => mapping(bytes32 => mapping(address => bool))) private _approvalByPartition;
+	mapping(address => mapping(bytes32 => mapping(address => bool))) private _approvedOperatorByPartition;
 
 	/**
 	 * @dev mapping of users to operator to approved status of token transfer irrespective of partition.
 	 * @notice operators can spend tokens on behalf of users irrespective of _allowance as long as this mapping is true.
 	 */
-	mapping(address => mapping(address => bool)) private _approval;
+	mapping(address => mapping(address => bool)) private _approvedOperator;
 
 	/**
 	 * @dev mapping of used nonces
@@ -116,12 +126,10 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	 * @dev event emitted when tokens are transferred with data attached
 	 */
 	event TransferWithData(address indexed from, address indexed to, uint256 amount, bytes data);
-
 	/**
 	 * @dev event emitted when issuance is disabled
 	 */
 	event IssuanceDisabled();
-
 	event Transfer(
 		address operator,
 		address indexed from,
@@ -131,9 +139,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		bytes data,
 		bytes operatorData
 	);
-
 	event Approval(address indexed owner, address indexed spender, uint256 amount, bytes32 indexed partition);
-
 	event Issued(
 		address indexed issuer,
 		address indexed to,
@@ -141,6 +147,30 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		bytes32 indexed partition,
 		bytes32 operatorData
 	);
+	event ControllerAdded(address indexed controller);
+	event ControllerRemoved(address indexed controller);
+	event ControllerTransferByPartition(
+		bytes32 indexed partition,
+		address indexed controller,
+		address indexed from,
+		address to,
+		uint256 amount,
+		bytes data,
+		bytes operatorData
+	);
+	event ControllerRedemptionByPartition(
+		bytes32 indexed partition,
+		address indexed controller,
+		address indexed tokenHolder,
+		uint256 amount,
+		bytes data,
+		bytes operatorData
+	);
+
+	modifier onlyController() {
+		require(_controllers[_controllerIndex[msg.sender]] == msg.sender, "ERC1400: caller is not a controller");
+		_;
+	}
 
 	// --------------------------------------------------------------- CONSTRUCTOR --------------------------------------------------------------- //
 	constructor(string memory name_, string memory symbol_, string memory version_) EIP712(name_, version_) {
@@ -151,6 +181,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		_name = name_;
 		_symbol = symbol_;
 		_version = version_;
+		_isIssuable = true;
 	}
 
 	// --------------------------------------------------------------- PUBLIC GETTERS --------------------------------------------------------------- //
@@ -160,6 +191,14 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	 */
 	function isIssuable() public view virtual override returns (bool) {
 		return _isIssuable;
+	}
+
+	/**
+	 * @dev Check whether the token is controllable by authorized controllers.
+	 * @return bool 'true' if the token is controllable
+	 */
+	function isControllable() public view virtual override returns (bool) {
+		return !(_controllers.length == 0);
 	}
 
 	/**
@@ -282,7 +321,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	 * @return if the operator address is allowed to control all tokens of a tokenHolder.
 	 */
 	function isOperator(address operator, address account) public view virtual override returns (bool) {
-		return _approval[account][operator];
+		return _approvedOperator[account][operator];
 	}
 
 	/**
@@ -293,7 +332,22 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		address operator,
 		address account
 	) public view virtual override returns (bool) {
-		return _approvalByPartition[account][partition][operator];
+		return _approvedOperatorByPartition[account][partition][operator];
+	}
+
+	/**
+	 * @return true if @param controller is a controller of this token.
+	 */
+	function isController(address controller) public view virtual returns (bool) {
+		uint256 controllerIndex = _controllerIndex[controller];
+		return _controllers[controllerIndex] == controller;
+	}
+
+	/**
+	 * @return the list of controllers of this token.
+	 */
+	function getControllers() public view virtual returns (address[] memory) {
+		return _controllers;
 	}
 
 	/**
@@ -425,9 +479,37 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		bytes calldata data,
 		bytes calldata operatorData
 	) public virtual override returns (bytes32) {
-		require(_approvalByPartition[from][partition][msg.sender], "ERC1400: Not authorized operator");
+		require(_approvedOperatorByPartition[from][partition][msg.sender], "ERC1400: Not authorized operator");
 		_transferByPartition(partition, msg.sender, from, to, amount, data, operatorData);
 		return partition;
+	}
+
+	/**
+	 * @dev See {IERC1644-controllerTransfer}.
+	 */
+	function controllerTransfer(
+		address from,
+		address to,
+		uint256 amount,
+		bytes calldata data,
+		bytes calldata operatorData
+	) public virtual override onlyController {
+		_transfer(msg.sender, from, to, amount, data, operatorData);
+
+		emit ControllerTransfer(msg.sender, from, to, amount, data, operatorData);
+	}
+
+	function controllerTransferByPartition(
+		bytes32 partition,
+		address from,
+		address to,
+		uint256 amount,
+		bytes calldata data,
+		bytes calldata operatorData
+	) public virtual onlyController {
+		_transferByPartition(partition, msg.sender, from, to, amount, data, operatorData);
+
+		emit ControllerTransferByPartition(partition, msg.sender, from, to, amount, data, operatorData);
 	}
 
 	/**
@@ -584,7 +666,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	 */
 	function authorizeOperator(address operator) public virtual override {
 		require(operator != msg.sender, "ERC1400: self authorization not allowed");
-		_approval[msg.sender][operator] = true;
+		_approvedOperator[msg.sender][operator] = true;
 		emit AuthorizedOperator(operator, msg.sender);
 	}
 
@@ -597,7 +679,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	 */
 	function authorizeOperatorByPartition(bytes32 partition, address operator) public virtual override {
 		require(operator != msg.sender, "ERC1400: self authorization not allowed");
-		_approvalByPartition[msg.sender][partition][operator] = true;
+		_approvedOperatorByPartition[msg.sender][partition][operator] = true;
 		emit AuthorizedOperatorByPartition(partition, operator, msg.sender);
 	}
 
@@ -609,7 +691,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	 * @param operator address to revoke as operator for caller.
 	 */
 	function revokeOperator(address operator) public virtual override {
-		_approval[msg.sender][operator] = false;
+		_approvedOperator[msg.sender][operator] = false;
 		emit RevokedOperator(operator, msg.sender);
 	}
 
@@ -620,7 +702,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	 * @param operator address to revoke as operator for caller.
 	 */
 	function revokeOperatorByPartition(bytes32 partition, address operator) public virtual override {
-		_approvalByPartition[msg.sender][partition][operator] = false;
+		_approvedOperatorByPartition[msg.sender][partition][operator] = false;
 		emit RevokedOperatorByPartition(partition, operator, msg.sender);
 	}
 
@@ -649,6 +731,64 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 					++j;
 				}
 			}
+
+			unchecked {
+				++i;
+			}
+		}
+	}
+
+	/**
+	 * @notice add controllers for the token.
+	 */
+	function addControllers(address[] calldata controllers) external virtual onlyOwner {
+		uint256 controllersLength = controllers.length;
+		uint256 i;
+
+		for (; i < controllersLength; ) {
+			require(controllers[i] != address(0), "ERC1400: controller is zero address");
+			require(
+				_controllerIndex[controllers[i]] == 0 && _controllers[0] != controllers[i],
+				"ERC1400: already controller"
+			);
+
+			uint256 newControllerIndex = _controllers.length;
+
+			_controllers.push(controllers[i]);
+			_controllerIndex[controllers[i]] = newControllerIndex;
+			emit ControllerAdded(controllers[i]);
+
+			unchecked {
+				++i;
+			}
+		}
+	}
+
+	/**
+	 * @notice remove controllers for the token.
+	 */
+	function removeControllers(address[] calldata controllers) external virtual onlyOwner {
+		uint256 controllersLength = controllers.length;
+		uint256 i;
+
+		for (; i < controllersLength; ) {
+			require(controllers[i] != address(0), "ERC1400: controller is zero address");
+
+			uint256 controllerIndex = _controllerIndex[controllers[i]];
+
+			if (controllerIndex == 0 && _controllers[0] != controllers[i]) {
+				revert("ERC1400: not controller");
+			}
+
+			uint256 lastControllerIndex = _controllers.length - 1;
+			address lastController = _controllers[lastControllerIndex];
+
+			_controllers[controllerIndex] = lastController;
+			_controllerIndex[lastController] = controllerIndex;
+			delete _controllerIndex[controllers[i]];
+			_controllers.pop();
+
+			emit ControllerRemoved(controllers[i]);
 
 			unchecked {
 				++i;
@@ -736,6 +876,35 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		_redeemByPartition(partition, msg.sender, account, amount, data, operatorData);
 	}
 
+	/**
+	 * @dev See {IERC1644-controllerRedeem}.
+	 */
+	function controllerRedeem(
+		address tokenHolder,
+		uint256 amount,
+		bytes calldata data,
+		bytes calldata operatorData
+	) public virtual override onlyController {
+		_redeem(msg.sender, tokenHolder, amount, data, operatorData);
+
+		emit ControllerRedemption(msg.sender, tokenHolder, amount, data, operatorData);
+	}
+
+	/**
+	 * @dev See {IERC1644-controllerRedeem}.
+	 */
+	function controllerRedeemByPartition(
+		bytes32 partition,
+		address tokenHolder,
+		uint256 amount,
+		bytes calldata data,
+		bytes calldata operatorData
+	) public virtual onlyController {
+		_redeemByPartition(partition, msg.sender, tokenHolder, amount, data, operatorData);
+
+		emit ControllerRedemptionByPartition(partition, msg.sender, tokenHolder, amount, data, operatorData);
+	}
+
 	// --------------------------------------------------------------- INTERNAL FUNCTIONS --------------------------------------------------------------- //
 	/**
 	 * @notice internal function to transfer tokens from any partition but the default one.
@@ -756,6 +925,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
+		//! Add controller ability to transfer from any partition
 		require(partition != bytes32(0), "ERC1400: Invalid partition (DEFAULT_PARTITION)");
 		require(_balancesByPartition[from][partition] >= amount, "ERC1400: transfer amount exceeds balance");
 		require(to != address(0), "ERC1400: transfer to the zero address");
