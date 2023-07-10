@@ -7,7 +7,6 @@ import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/draf
 import { IERC1400 } from "./IERC1400.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 
-//TODO: @dev add controllers and controllersByPartition
 //TODO: @dev review canTransfer functions
 contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	// --------------------------------------------------------------- CONSTANTS --------------------------------------------------------------- //
@@ -925,14 +924,15 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
-		//! Add controller ability to transfer from any partition
 		require(partition != bytes32(0), "ERC1400: Invalid partition (DEFAULT_PARTITION)");
 		require(_balancesByPartition[from][partition] >= amount, "ERC1400: transfer amount exceeds balance");
 		require(to != address(0), "ERC1400: transfer to the zero address");
 		if (operator != from) {
 			require(
-				isOperatorForPartition(partition, operator, from) || isOperator(operator, from),
-				"ERC1400: transfer operator is not an operator for partition"
+				isOperatorForPartition(partition, operator, from) ||
+					isOperator(operator, from) ||
+					isController(operator),
+				"ERC1400: transfer operator is not an operator or controller for partition"
 			);
 		}
 		_beforeTokenTransfer(partition, operator, from, to, amount, data, operatorData);
