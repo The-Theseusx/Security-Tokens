@@ -5,9 +5,10 @@ import { Ownable2Step } from "openzeppelin-contracts/contracts/access/Ownable2St
 import { ERC1643 } from "../ERC1643/ERC1643.sol";
 import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/draft-EIP712.sol";
 import { IERC1400 } from "./IERC1400.sol";
+import { IERC1400Receiver } from "./IERC1400Receiver.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 
-//TODO: @dev review canTransfer functions
+//TODO: @dev review all functions
 contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	// --------------------------------------------------------------- CONSTANTS --------------------------------------------------------------- //
 	/**
@@ -396,13 +397,16 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	function canTransfer(
 		address to,
 		uint256 amount,
-		bytes calldata
+		bytes calldata data
 	) public view virtual override returns (bool, bytes memory, bytes32) {
-		if (balanceOfNonPartitioned(msg.sender) < amount) return (false, bytes("0x52"), bytes32(0));
 		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
-		// if (data.length != 0) {
-		// 	if (_validateData(msg.sender, msg.sender, to, amount, DEFAULT_PARTITION, data)) return (true, bytes("0x51"), bytes32(0));
-		// }
+		if (amount == 0) return (false, bytes("0x50"), bytes32(0));
+		if (balanceOfNonPartitioned(msg.sender) < amount) return (false, bytes("0x52"), bytes32(0));
+		if (to.code.length > 0) {
+			(bool can, ) = _canReceive(DEFAULT_PARTITION, msg.sender, msg.sender, to, amount, data, "");
+			if (!can) return (false, bytes("0x57"), bytes32(0));
+		}
+
 		return (true, bytes("0x51"), bytes32(0));
 	}
 
@@ -415,13 +419,30 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		uint256 amount,
 		bytes calldata data
 	) public view virtual override returns (bool, bytes memory, bytes32) {
-		if (amount > allowance(from, msg.sender)) return (false, bytes("0x53"), bytes32(0));
+		if (from == address(0)) return (false, bytes("0x56"), bytes32(0));
+		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
+		if (to.code.length > 0) {
+			(bool can, ) = _canReceive(DEFAULT_PARTITION, msg.sender, from, to, amount, data, "");
+			if (!can) return (false, bytes("0x57"), bytes32(0));
+		}
+		if (amount == 0) return (false, bytes("0x50"), bytes32(0));
+		if (amount > allowance(from, msg.sender)) {
+			/** @dev possibly called by an operator or controller, check if the sender is an operator or controller */
+			if (
+				!isOperator(msg.sender, from) ||
+				!isOperatorForPartition(DEFAULT_PARTITION, msg.sender, from) ||
+				!isController(msg.sender)
+			) {
+				return (false, bytes("0x53"), bytes32(0));
+			}
+		}
+		if (balanceOfNonPartitioned(msg.sender) < amount) return (false, bytes("0x52"), bytes32(0));
 		if (data.length != 0) {
 			if (!_validateData(owner(), from, to, amount, DEFAULT_PARTITION, data)) {
 				return (false, bytes("0x5f"), bytes32(0));
 			}
 		}
-		return canTransfer(to, amount, data);
+		return (true, bytes("0x51"), bytes32(0));
 	}
 
 	// --------------------------------------------------------------- TRANSFERS --------------------------------------------------------------- //
@@ -935,6 +956,8 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 				"ERC1400: transfer operator is not an operator or controller for partition"
 			);
 		}
+		/** @dev prevent zero token transfers (spam transfers) */
+		require(amount != 0, "ERC1400: zero amount");
 		_beforeTokenTransfer(partition, operator, from, to, amount, data, operatorData);
 		_balancesByPartition[from][partition] -= amount;
 		_balances[from] -= amount;
@@ -970,6 +993,8 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	) internal virtual {
 		require(_balancesByPartition[from][DEFAULT_PARTITION] >= amount, "ERC1400: transfer amount exceeds balance");
 		require(to != address(0), "ERC1400: transfer to the zero address");
+		/** @dev prevent zero token transfers (spam transfers) */
+		require(amount != 0, "ERC1400: zero amount");
 
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 		_balancesByPartition[from][DEFAULT_PARTITION] -= amount;
@@ -996,6 +1021,8 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 
 		require(_validateData(owner(), from, to, amount, DEFAULT_PARTITION, data), "ERC1400: invalid data");
+		/** @dev prevent zero token transfers (spam transfers) */
+		require(amount != 0, "ERC1400: zero amount");
 
 		_transfer(operator, from, to, amount, data, operatorData);
 		emit TransferWithData(msg.sender, to, amount, data);
@@ -1237,7 +1264,60 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		emit IssuanceDisabled();
 	}
 
+	function _canReceive(
+		bytes32 partition,
+		address operator,
+		address from,
+		address to,
+		uint256 amount,
+		bytes memory data,
+		bytes memory operatorData
+	) internal view virtual returns (bool, bytes memory) {
+		try IERC1400Receiver(to).onERC1400Received(partition, operator, from, to, amount, data, operatorData) returns (
+			bytes4 retVal
+		) {
+			return (retVal == IERC1400Receiver.onERC1400Received.selector, "");
+		} catch (bytes memory reason) {
+			return (false, reason);
+		}
+	}
+
 	// --------------------------------------------------------------- HOOKS --------------------------------------------------------------- //
+
+	function _checkOnERC1400Received(
+		bytes32 partition,
+		address operator,
+		address from,
+		address to,
+		uint256 amount,
+		bytes memory data,
+		bytes memory operatorData
+	) private view returns (bool) {
+		if (to.code.length > 0) {
+			(bool success, bytes memory reason) = _canReceive(
+				partition,
+				operator,
+				from,
+				to,
+				amount,
+				data,
+				operatorData
+			);
+			if (!success) {
+				if (reason.length == 0) {
+					revert("ERC1400: transfer to non ERC1400Receiver implementer");
+				} else {
+					assembly {
+						revert(add(32, reason), mload(reason))
+					}
+				}
+			} else {
+				return true;
+			}
+		} else {
+			return true;
+		}
+	}
 
 	/**
 	@notice hook to be called before any token transfer
