@@ -360,9 +360,12 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	/**
 	* @notice Error messages:
 	  -IP: Invalid partition
+	  -IS: Invalid sender
 	  -IPB: Insufficient partition balance
 	  -IR: Receiver is invalid
 	  -ID: Invalid transfer data
+	  -IA: Insufficient allowance
+	  -ITA: Insufficient transfer amount
 
 	 * @param from token holder.
 	 * @param to token recipient.
@@ -378,15 +381,31 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		bytes calldata data
 	) public view virtual override returns (bytes memory, bytes32, bytes32) {
 		uint256 index = _partitionIndex[partition];
-		if (_partitions[index] != partition) return ("0x50", "ERC1400: IP", "");
-		if (_balancesByPartition[from][partition] < amount) return ("0x52", "ERC1400: IPB", "");
-		if (to == address(0)) return ("0x57", "ERC1400: IR", "");
-		if (data.length != 0) {
-			// if (_validateData(owner(), from, to, amount, partition, data)) {
-			// 	return ("0x51", "ERC1400: CT", "");
-			// }
-			//return ("0x50", "ERC1400: ID", "");
+		if (_partitions[index] != partition) return ("0x50", "ERC1400: IP", bytes32(0));
+		if (balanceOfByPartition(partition, from) < amount) return ("0x52", "ERC1400: IPB", bytes32(0));
+		if (from == address(0)) return (bytes("0x56"), "ERC1400: IS", bytes32(0));
+		if (to == address(0)) return ("0x57", "ERC1400: IR", bytes32(0));
+		if (to.code.length > 0) {
+			(bool can, ) = _canReceive(partition, msg.sender, from, to, amount, data, "");
+			if (!can) return (bytes("0x57"), "ERC1400: IR", bytes32(0));
 		}
+		if (amount == 0) return ("0x50", "ERC1400: ITA", bytes32(0));
+		if (amount > allowance(from, msg.sender)) {
+			/** @dev possibly called by an operator or controller, check if the sender is an operator or controller */
+			if (
+				!isOperator(msg.sender, from) ||
+				!isOperatorForPartition(partition, msg.sender, from) ||
+				!isController(msg.sender)
+			) {
+				return (bytes("0x53"), "IA", bytes32(0));
+			}
+		}
+		//if (data.length != 0) {
+		// if (_validateData(owner(), from, to, amount, partition, data)) {
+		// 	return ("0x51", "ERC1400: CT", "");
+		// }
+		//return ("0x50", "ERC1400: ID", "");
+		//}
 
 		return ("0x51", "ERC1400: CT", "");
 	}
