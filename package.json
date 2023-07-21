@@ -15,7 +15,12 @@
 		"type": "git",
 		"url": "git+https://github.com/The-Theseusx/Security-Tokens.git"
 	},
-	"keywords": ["ERC1400", "securities", "security", "tokens"],
+	"keywords": [
+		"ERC1400",
+		"securities",
+		"security",
+		"tokens"
+	],
 	"author": "Jayus Jay",
 	"license": "ISC",
 	"bugs": {
