@@ -198,7 +198,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	 * @return bool 'true' if the token is controllable
 	 */
 	function isControllable() public view virtual override returns (bool) {
-		return !(_controllers.length == 0);
+		return _controllers.length != 0;
 	}
 
 	/**
@@ -411,7 +411,10 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	}
 
 	/**
-	 * @dev See {IERC1594-canTransfer}.
+	 * @notice Check if a transfer of tokens of the default partition is possible.
+	 * @param to token recipient.
+	 * @param amount token amount.
+	 * @param data information attached to the transfer, by the token holder.
 	 */
 	function canTransfer(
 		address to,
@@ -430,7 +433,11 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	}
 
 	/**
-	 * @dev See {IERC1594-canTransferFrom}.
+	 * @notice Check if a transfer from of tokens of the default partition is possible.
+	 * @param from token holder.
+	 * @param to token recipient.
+	 * @param amount token amount.
+	 * @param data information attached to the transfer.
 	 */
 	function canTransferFrom(
 		address from,
@@ -477,7 +484,10 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	}
 
 	/**
-	 *! @dev See {IERC1594-transferWithData}.amount
+	 * @notice transfer tokens from the default partition with additional data.
+	 * @param to the address to transfer tokens to
+	 * @param amount the amount to transfer
+	 * @param data transfer data.
 	 */
 	function transferWithData(address to, uint256 amount, bytes calldata data) public virtual override {
 		_transferWithData(msg.sender, msg.sender, to, amount, data, "");
@@ -524,7 +534,12 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	}
 
 	/**
-	 * @dev See {IERC1644-controllerTransfer}.
+	 * @notice for controllers to transfer tokens of the default partition.
+	 * @param from the address to transfer from
+	 * @param to the address to transfer to
+	 * @param amount the amount to transfer
+	 * @param data additional transfer data.
+	 * @param operatorData additional data attached by the operator (if any)
 	 */
 	function controllerTransfer(
 		address from,
@@ -538,6 +553,15 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		emit ControllerTransfer(msg.sender, from, to, amount, data, operatorData);
 	}
 
+	/**
+	 * @notice for controllers to transfer tokens of a given partition but the default partition.
+	 * @param partition the token partition to transfer
+	 * @param from the address to transfer from
+	 * @param to the address to transfer to
+	 * @param amount the amount to transfer
+	 * @param data additional transfer data.
+	 * @param operatorData additional data attached by the operator (if any)
+	 */
 	function controllerTransferByPartition(
 		bytes32 partition,
 		address from,
@@ -564,7 +588,11 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	}
 
 	/**
-	 *! @dev See {IERC1594-transferFromWithData}.
+	 * @notice transfers from the default partition with data.
+	 * @param from the address to transfer from
+	 * @param to the address to transfer to
+	 * @param amount the amount to transfer from
+	 * @param data transfer data to be validated.
 	 */
 	function transferFromWithData(
 		address from,
@@ -846,7 +874,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	 * @param data additional data attached to the issue.
 	 */
 	function issue(address account, uint256 amount, bytes calldata data) public virtual override onlyOwner {
-		_issue(account, amount, data);
+		_issue(msg.sender, account, amount, data);
 	}
 
 	/**
@@ -863,19 +891,25 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		bytes calldata data
 	) public virtual override onlyOwner {
 		require(partition != DEFAULT_PARTITION, "ERC1400: Invalid partition (DEFAULT_PARTITION)");
-		_issueByPartition(partition, account, amount, data);
+		_issueByPartition(partition, msg.sender, account, amount, data);
 	}
 
 	// -------------------------------------------------------------------- REDEMPTION -------------------------------------------------------------------- //
+
 	/**
-	 * @dev See {IERC1594-redeem}.
+	 * @notice allows users to redeem token.
+	 * @param amount the amount of tokens to redeem.
+	 * @param data additional data attached to the transfer.
 	 */
 	function redeem(uint256 amount, bytes calldata data) public virtual override {
 		_redeem(msg.sender, msg.sender, amount, data, "");
 	}
 
 	/**
-	 * @dev See {IERC1594-redeemFrom}.
+	 * @notice allows authorized users to redeem token on behalf of someone else.
+	 * @param tokenHolder the address to redeem token from.
+	 * @param amount the amount of tokens to redeem.
+	 * @param data additional data attached to the transfer.
 	 */
 	function redeemFrom(address tokenHolder, uint256 amount, bytes calldata data) public virtual override onlyOwner {
 		_redeem(msg.sender, tokenHolder, amount, data, "");
@@ -916,7 +950,11 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	}
 
 	/**
-	 * @dev See {IERC1644-controllerRedeem}.
+	 * @notice allows controllers to redeem tokens of the default partition of users.
+	 * @param tokenHolder the address to redeem token from.
+	 * @param amount the amount of tokens to redeem.
+	 * @param data additional data attached to the transfer.
+	 * @param operatorData additional data attached by the operator (if any)
 	 */
 	function controllerRedeem(
 		address tokenHolder,
@@ -930,7 +968,12 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	}
 
 	/**
-	 * @dev See {IERC1644-controllerRedeem}.
+	 * @notice allows controllers to redeem tokens of a given partition of users.
+	 * @param partition the token partition to redeem.
+	 * @param tokenHolder the address to redeem token from.
+	 * @param amount the amount of tokens to redeem.
+	 * @param data additional data attached to the transfer.
+	 * @param operatorData additional data attached by the operator (if any)
 	 */
 	function controllerRedeemByPartition(
 		bytes32 partition,
@@ -945,6 +988,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	}
 
 	// --------------------------------------------------------------- INTERNAL FUNCTIONS --------------------------------------------------------------- //
+
 	/**
 	 * @notice internal function to transfer tokens from any partition but the default one.
 	 * @param partition the partition to transfer tokens from
@@ -978,6 +1022,8 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		/** @dev prevent zero token transfers (spam transfers) */
 		require(amount != 0, "ERC1400: zero amount");
 		_beforeTokenTransfer(partition, operator, from, to, amount, data, operatorData);
+		_checkOnERC1400Received(partition, operator, from, to, amount, data, operatorData);
+
 		_balancesByPartition[from][partition] -= amount;
 		_balances[from] -= amount;
 
@@ -1016,6 +1062,8 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		require(amount != 0, "ERC1400: zero amount");
 
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
+		_checkOnERC1400Received(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
+
 		_balancesByPartition[from][DEFAULT_PARTITION] -= amount;
 		_balances[from] -= amount;
 
@@ -1038,6 +1086,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		bytes memory operatorData
 	) internal virtual {
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
+		_checkOnERC1400Received(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 
 		require(_validateData(owner(), from, to, amount, DEFAULT_PARTITION, data), "ERC1400: invalid data");
 		/** @dev prevent zero token transfers (spam transfers) */
@@ -1111,51 +1160,59 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 
 	/**
 	 * @notice internal function to issue tokens from the default partition.
+	 * @param operator the address performing the issuance
 	 * @param account the address to issue tokens to
 	 * @param amount the amount to issue
 	 * @param data additional data attached to the issuance
 	 */
-	function _issue(address account, uint256 amount, bytes memory data) internal virtual {
+	function _issue(address operator, address account, uint256 amount, bytes memory data) internal virtual {
 		require(account != address(0), "ERC1400: Invalid recipient (zero address)");
 		require(_isIssuable, "ERC1400: Token is not issuable");
 		_beforeTokenTransfer(DEFAULT_PARTITION, msg.sender, address(0), account, amount, data, "");
-		//validate data
-		_totalSupply += amount;
-		unchecked {
-			_balances[account] += amount;
-			_balancesByPartition[account][DEFAULT_PARTITION] += amount;
-			_totalSupplyByPartition[DEFAULT_PARTITION] += amount;
-		}
+		_checkOnERC1400Received(DEFAULT_PARTITION, operator, address(0), account, amount, data, "");
 
-		//emit Issued(address(0), account, amount, data);
+		_totalSupply += amount;
+		_balances[account] += amount;
+		_balancesByPartition[account][DEFAULT_PARTITION] += amount;
+		_totalSupplyByPartition[DEFAULT_PARTITION] += amount;
+
+		emit Issued(address(0), account, amount, data);
 		_afterTokenTransfer(DEFAULT_PARTITION, msg.sender, address(0), account, amount, data, "");
 	}
 
 	/**
 	 * @notice internal function to issue tokens from any partition but the default one.
+	 * @param partition the partition to issue tokens from
+	 * @param operator the address performing the issuance
 	 * @param account the address to issue tokens to
 	 * @param amount the amount to issue
 	 * @param data additional data attached to the issuance
 	 */
-	function _issueByPartition(bytes32 partition, address account, uint256 amount, bytes memory data) internal virtual {
+	function _issueByPartition(
+		bytes32 partition,
+		address operator,
+		address account,
+		uint256 amount,
+		bytes memory data
+	) internal virtual {
 		require(account != address(0), "ERC1400: Invalid recipient (zero address)");
 		require(_isIssuable, "ERC1400: Token is not issuable");
 
-		_beforeTokenTransfer(partition, msg.sender, address(0), account, amount, data, "");
+		_beforeTokenTransfer(partition, operator, address(0), account, amount, data, "");
+		_checkOnERC1400Received(partition, operator, address(0), account, amount, data, "");
+
 		_totalSupply += amount;
-		unchecked {
-			_totalSupplyByPartition[partition] += amount;
-			_balances[account] += amount;
-			_balancesByPartition[account][partition] += amount;
-		}
+		_totalSupplyByPartition[partition] += amount;
+		_balances[account] += amount;
+		_balancesByPartition[account][partition] += amount;
+
 		_addTokenToPartitionList(partition, account);
 
-		//emit IssuedByPartition(partition, account, amount, data);
-		_afterTokenTransfer(partition, msg.sender, address(0), account, amount, data, "");
+		emit IssuedByPartition(partition, account, amount, data);
+		_afterTokenTransfer(partition, operator, address(0), account, amount, data, "");
 	}
 
 	/**
-	 * @dev called during issueByPartition
 	 * @notice internal function to update the contract token partition lists.
 	 */
 	function _addTokenToPartitionList(bytes32 partition, address account) internal virtual {
@@ -1165,19 +1222,17 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		bytes32 currentPartition = partitions[index];
 
 		if (partition != currentPartition) {
-			///partition does not exist
+			///@dev partition does not exist, add partition to contract
 
-			//add partition to contract
 			_partitionIndex[partition] = partitions.length;
 			_partitions.push(partition);
 			_totalPartitions += 1;
 
-			//add partition to user
+			///@dev add partition to user's partition list
 			_partitionIndexOfUser[account][partition] = _partitionsOf[account].length;
 			_partitionsOf[account].push(partition);
 		} else {
-			///partition exists
-
+			///@dev partition exists, add partition to user's partition list if not already added
 			if (!isUserPartition(partition, account)) {
 				_partitionIndexOfUser[account][partition] = _partitionsOf[account].length;
 				_partitionsOf[account].push(partition);
@@ -1186,7 +1241,12 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	}
 
 	/**
-	 * @dev burns tokens from a recipient
+	 * @notice burns tokens from a recipient's default partition.
+	 * @param operator the address performing the burn
+	 * @param account the address to burn tokens from
+	 * @param amount the amount to burn
+	 * @param data additional data attached to the burn
+	 * @param operatorData additional data attached to the burn by the operator (if any)
 	 */
 	function _redeem(
 		address operator,
@@ -1196,6 +1256,14 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		bytes memory operatorData
 	) internal virtual {
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, account, address(0), amount, data, operatorData);
+		if (operator != account) {
+			require(
+				isOperator(operator, account) ||
+					isOperatorForPartition(DEFAULT_PARTITION, operator, account) ||
+					isController(operator),
+				"ERC1400: transfer operator is not authorized"
+			);
+		}
 
 		require(_balancesByPartition[account][DEFAULT_PARTITION] >= amount, "ERC1400: Not enough funds");
 
@@ -1203,6 +1271,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		_balancesByPartition[account][DEFAULT_PARTITION] -= amount;
 		_totalSupply -= amount;
 		_totalSupplyByPartition[DEFAULT_PARTITION] -= amount;
+
 		emit Redeemed(operator, account, amount, data);
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, account, address(0), amount, data, operatorData);
 	}
@@ -1225,12 +1294,13 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		bytes memory operatorData
 	) internal virtual {
 		_beforeTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
-
 		require(_balancesByPartition[account][partition] >= amount, "ERC1400: Not enough balance");
 		if (operator != account) {
 			require(
-				isOperatorForPartition(partition, operator, account) || isOperator(operator, account),
-				"ERC1400: transfer operator is not an operator for partition"
+				isOperatorForPartition(partition, operator, account) ||
+					isOperator(operator, account) ||
+					isController(operator),
+				"ERC1400: transfer operator is not authorized"
 			);
 		}
 
@@ -1243,6 +1313,15 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		_afterTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
 	}
 
+	/**
+	 * @notice validate the data provided by the user when performing transactions that require validated data (signatures)
+	 * @param authorizer the address authorizing the transaction
+	 * @param from the address sending tokens
+	 * @param to the address receiving tokens
+	 * @param amount the amount of tokens to be sent
+	 * @param partition the partition from which the tokens are sent
+	 * @param signature the signature provided by the authorizer (data field in parent function)
+	 */
 	function _validateData(
 		address authorizer,
 		address from,
@@ -1283,6 +1362,17 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 		emit IssuanceDisabled();
 	}
 
+	/**
+	 * @notice checks if @param to can receive ERC1400 tokens.
+	 * @param partition the partition to transfer tokens from
+	 * @param operator the address performing the transfer
+	 * @param from the address to transfer tokens from
+	 * @param to the address to transfer tokens to, should be a contract
+	 * @param amount the amount to transfer
+	 * @param data additional data attached to the transfer
+	 * @param operatorData additional data attached to the transfer by the operator (if any)
+	 * @return bool 'true' if @param to can receive ERC1400 tokens, 'false' if not with corresponding revert data.
+	 */
 	function _canReceive(
 		bytes32 partition,
 		address operator,
@@ -1303,6 +1393,16 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 
 	// --------------------------------------------------------------- HOOKS --------------------------------------------------------------- //
 
+	/**
+	 * @notice hook to be called to check if @param to can receive ERC1400 tokens. Reverts if not.
+	 * @param partition the partition to transfer tokens from
+	 * @param operator the address performing the transfer
+	 * @param from the address to transfer tokens from
+	 * @param to the address to transfer tokens to
+	 * @param amount the amount to transfer
+	 * @param data additional data attached to the transfer
+	 * @param operatorData additional data attached to the transfer by the operator (if any)
+	 */
 	function _checkOnERC1400Received(
 		bytes32 partition,
 		address operator,
@@ -1326,6 +1426,7 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 				if (reason.length == 0) {
 					revert("ERC1400: transfer to non ERC1400Receiver implementer");
 				} else {
+					//solhint-disable no-inline-assembly
 					assembly {
 						revert(add(32, reason), mload(reason))
 					}

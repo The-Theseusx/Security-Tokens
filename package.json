@@ -8,29 +8,26 @@
 		"test": "test"
 	},
 	"scripts": {
-		"test": "mocha"
+		"test": "mocha",
+		"format": "yarn prettier --write --plugin=prettier-plugin-solidity 'src/**/*.sol'"
 	},
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/The-Theseusx/Security-Tokens.git"
 	},
-	"keywords": [
-		"ERC1400",
-		"securities",
-		"security",
-		"tokens"
-	],
+	"keywords": ["ERC1400", "securities", "security", "tokens"],
 	"author": "Jayus Jay",
 	"license": "ISC",
 	"bugs": {
 		"url": "https://github.com/The-Theseusx/Security-Tokens/issues"
 	},
 	"homepage": "https://github.com/The-Theseusx/Security-Tokens#readme",
-	"devDependencies": {},
+	"devDependencies": {
+		"prettier": "^3.0.0",
+		"prettier-plugin-solidity": "^1.1.3"
+	},
 	"dependencies": {
 		"ethers": "^6.6.3",
-		"prettier": "^3.0.0",
-		"prettier-plugin-solidity": "^1.1.3",
 		"solhint": "^3.4.1"
 	}
 }
