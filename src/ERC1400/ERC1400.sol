@@ -11,102 +11,66 @@ import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA
 //TODO: @dev review all functions
 contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	// --------------------------------------------------------------- CONSTANTS --------------------------------------------------------------- //
-	/**
-	 * @dev tokens not belonging to any partition should use this partition
-	 */
+
+	///@dev tokens not belonging to any partition should use this partition
 	bytes32 public constant DEFAULT_PARTITION = bytes32(0);
 
-	/**
-	 * @dev EIP712 typehash for data validation
-	 */
+	///@dev EIP712 typehash for data validation
 	bytes32 public constant ERC1400_DATA_VALIDATION_HASH =
 		keccak256("ERC1400ValidateData(address from,address to,uint256 amount,bytes32 partition,uint256 nonce)");
 
 	// --------------------------------------------------------------- PRIVATE STATE VARIABLES --------------------------------------------------------------- //
 
-	/**
-	 * @dev should track if token is issuable or not. Should not be modifiable if false.
-	 */
+	///@dev should track if token is issuable or not. Should not be modifiable if false.
 	bool private _isIssuable;
 
-	/**
-	 * @dev token name
-	 */
+	///@dev token name
+
 	string private _name;
 
-	/**
-	 * @dev token symbol
-	 */
+	///@dev token symbol
 	string private _symbol;
 
-	/**
-	 * @dev token contract version for EIP712
-	 */
+	///@dev token contract version for EIP712
 	string private _version;
 
-	/**
-	 * @dev token total suppply irrespective of partition.
-	 */
+	///@dev token total suppply irrespective of partition.
 	uint256 private _totalSupply;
 
-	/**
-	 * @dev total number of partitions.
-	 */
+	///@dev total number of partitions.
 	uint256 private _totalPartitions;
 
-	/**
-	 * @dev mapping of partition to total token supply of partition.
-	 */
+	///@dev mapping of partition to total token supply of partition.
 	mapping(bytes32 => uint256) private _totalSupplyByPartition;
 
-	/**
-	 * @dev array of token partitions.
-	 */
+	///@dev array of token partitions.
 	bytes32[] private _partitions;
 
-	/**
-	 * @dev array of token controllers.
-	 */
+	///@dev array of token controllers.
 	address[] private _controllers;
 
-	/**
-	 * @dev mapping of partition to index in _partitions array.
-	 */
+	///@dev mapping of partition to index in _partitions array.
 	mapping(bytes32 => uint256) private _partitionIndex;
 
-	/**
-	 * @dev mapping of controller to index in _controllers array.
-	 */
+	///@dev mapping of controller to index in _controllers array.
 	mapping(address => uint256) private _controllerIndex;
 
-	/**
-	 * @dev mapping from user to array of partitions.
-	 */
+	///@dev mapping from user to array of partitions.
 	mapping(address => bytes32[]) private _partitionsOf;
 
-	/**
-	 * @dev mapping of user to mapping of partition in _partitionsOf array to index of partition in this array.
-	 */
+	///@dev mapping of user to mapping of partition in _partitionsOf array to index of partition in this array.
 	mapping(address => mapping(bytes32 => uint256)) private _partitionIndexOfUser;
 
-	/**
-	 * @dev mapping from user to total token balances irrespective of partition.
-	 */
+	///@dev mapping from user to total token balances irrespective of partition.
 	mapping(address => uint256) private _balances;
 
-	/**
-	 * @dev mapping from user to partition to total token balances of corresponding partition.
-	 */
+	///@dev mapping from user to partition to total token balances of corresponding partition.
 	mapping(address => mapping(bytes32 => uint256)) private _balancesByPartition;
 
-	/**
-	 * @dev mapping of user to partition to spender to allowance of token by partition.
-	 */
+	///@dev mapping of user to partition to spender to allowance of token by partition.
 	mapping(address => mapping(bytes32 => mapping(address => uint256))) private _allowanceByPartition;
 
-	/**
-	 * @dev mapping of users to partition to operator to approved status of token transfer.
-	 */
+	///@dev mapping of users to partition to operator to approved status of token transfer.
 	mapping(address => mapping(bytes32 => mapping(address => bool))) private _approvedOperatorByPartition;
 
 	/**
@@ -115,20 +79,15 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	 */
 	mapping(address => mapping(address => bool)) private _approvedOperator;
 
-	/**
-	 * @dev mapping of used nonces
-	 */
+	///@dev mapping of used nonces
 	mapping(address => uint256) private _userNonce;
 
 	// --------------------------------------------------------------- EVENTS --------------------------------------------------------------- //
 
-	/**
-	 * @dev event emitted when tokens are transferred with data attached
-	 */
+	///@dev event emitted when tokens are transferred with data attached
 	event TransferWithData(address indexed from, address indexed to, uint256 amount, bytes data);
-	/**
-	 * @dev event emitted when issuance is disabled
-	 */
+
+	///@dev event emitted when issuance is disabled
 	event IssuanceDisabled();
 	event Transfer(
 		address operator,
