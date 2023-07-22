@@ -23,6 +23,17 @@ interface IERC1410 {
 		bytes operatorData
 	);
 
+	// Transfer Events
+	event TransferByPartition(
+		bytes32 indexed fromPartition,
+		address operator,
+		address indexed from,
+		address indexed to,
+		uint256 amount,
+		bytes data,
+		bytes operatorData
+	);
+
 	// Token Information
 	function balanceOf(address account) external view returns (uint256);
 
@@ -83,15 +94,4 @@ interface IERC1410 {
 		bytes calldata data,
 		bytes calldata operatorData
 	) external;
-
-	// Transfer Events
-	event TransferByPartition(
-		bytes32 indexed fromPartition,
-		address operator,
-		address indexed from,
-		address indexed to,
-		uint256 amount,
-		bytes data,
-		bytes operatorData
-	);
 }
