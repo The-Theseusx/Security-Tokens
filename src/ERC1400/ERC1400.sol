@@ -3,13 +3,14 @@ pragma solidity ^0.8.0;
 
 import { Ownable2Step } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import { ERC1643 } from "../ERC1643/ERC1643.sol";
+import { ERC165 } from "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
 import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/draft-EIP712.sol";
 import { IERC1400 } from "./IERC1400.sol";
 import { IERC1400Receiver } from "./IERC1400Receiver.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 
 //TODO: @dev review all functions
-contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
+contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712, ERC165 {
 	// --------------------------------------------------------------- CONSTANTS --------------------------------------------------------------- //
 
 	///@dev tokens not belonging to any partition should use this partition
@@ -144,10 +145,11 @@ contract ERC1400 is IERC1400, Ownable2Step, ERC1643, EIP712 {
 	}
 
 	// --------------------------------------------------------------- PUBLIC GETTERS --------------------------------------------------------------- //
+	function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+		return interfaceId == type(IERC1400).interfaceId || super.supportsInterface(interfaceId);
+	}
 
-	/**
-	 * @dev See {IERC1594-isIssuable}.
-	 */
+	/// @return true if more tokens can be issued by the issuer, false otherwise.
 	function isIssuable() public view virtual override returns (bool) {
 		return _isIssuable;
 	}
