@@ -274,13 +274,11 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @return true if the user is the owner of the partition, false otherwise.
 	 */
 	function isUserPartition(bytes32 partition, address user) public view virtual returns (bool) {
-		bytes32[] memory partitions = _partitionsOf[user];
-		uint256 index = _partitionIndexOfUser[user][partition];
-		return partition == partitions[index];
+		return partition == _partitionsOf[user][_partitionIndexOfUser[user][partition]];
 	}
 
 	/**
-	 * @return if the operator address is allowed to control all tokens of a tokenHolder.
+	 * @return if the operator address is allowed to control all tokens of a tokenHolder irrespective of partition.
 	 */
 	function isOperator(address operator, address account) public view virtual override returns (bool) {
 		return _approvedOperator[account][operator];
