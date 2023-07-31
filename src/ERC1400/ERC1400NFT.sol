@@ -60,14 +60,11 @@ contract ERC1400NFT is Context, Ownable2Step, ERC165 {
 	///@dev mapping of user to mapping of partition in _partitionsOf array to index of partition in this array.
 	mapping(address => mapping(bytes32 => uint256)) private _partitionIndexOfUser;
 
-	///@dev mapping from token ID to approved address
-	mapping(uint256 => address) private _tokenApprovals;
+	///@dev mapping from token ID to partition to approved address
+	mapping(uint256 => mapping(bytes32 => address)) private _tokenApprovalsByPartition;
 
 	///@dev mapping from owner to operator approvals
 	mapping(address => mapping(address => bool)) private _operatorApprovals;
-
-	///@dev mapping from owner to partition to operator approvals
-	mapping(address => mapping(bytes32 => mapping(address => bool))) private _operatorApprovalsByPartition;
 
 	///@dev mapping of used nonces
 	mapping(address => uint256) private _userNonce;
@@ -125,6 +122,15 @@ contract ERC1400NFT is Context, Ownable2Step, ERC165 {
 	}
 
 	/**
+	 * @param partition the token partition.
+	 * @param user the address to check if it is the owner of the partition.
+	 * @return true if the user is the owner of the partition, false otherwise.
+	 */
+	function isUserPartition(bytes32 partition, address user) public view virtual returns (bool) {
+		return partition == _partitionsOf[user][_partitionIndexOfUser[user][partition]];
+	}
+
+	/**
 	 * @return the balance of a user for a given partition, default partition inclusive.
 	 */
 	function balanceOfByPartition(bytes32 partition, address account) public view virtual returns (uint256) {
@@ -145,7 +151,7 @@ contract ERC1400NFT is Context, Ownable2Step, ERC165 {
 		return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, tokenId.toString())) : "";
 	}
 
-	function _changeBaseURI(string memory baseUri_) internal virtual onlyOwner {
+	function _changeBaseURI(string memory baseUri_) internal virtual {
 		_baseUri = baseUri_;
 	}
 
@@ -172,19 +178,57 @@ contract ERC1400NFT is Context, Ownable2Step, ERC165 {
 	}
 
 	/**
-	 * @dev See {IERC721-isApprovedForAll}.
+	 * @dev Check if an operator is allowed to manage tokens of a given owner irrespective of partitions.
 	 */
 	function isApprovedForAll(address owner, address operator) public view virtual returns (bool) {
-		return _operatorApprovals[owner][operator];
+		return isOperator(operator, owner);
+	}
+
+	function isOperator(address operator, address account) public view virtual returns (bool) {
+		return _operatorApprovals[account][operator];
+	}
+
+	function getApproved(uint256 tokenId) public view virtual returns (address) {
+		require(exists(tokenId), "ERC1400NFT: nonexistent token");
+
+		return _tokenApprovalsByPartition[tokenId][DEFAULT_PARTITION];
+	}
+
+	function setApprovalForAll(address operator, bool approved) public virtual {
+		approved ? authorizeOperator(operator) : revokeOperator(operator);
+	}
+
+	/**
+	 * @notice authorize an operator to use _msgSender()'s tokens irrespective of partitions.
+	 * @notice this grants permission to the operator to transfer ALL tokens of _msgSender().
+	 * @notice this includes burning tokens on behalf of the token holder.
+	 * @param operator address to authorize as operator for caller.
+	 */
+	function authorizeOperator(address operator) public virtual {
+		require(operator != _msgSender(), "ERC1400NFT: self authorization not allowed");
+		_operatorApprovals[_msgSender()][operator] = true;
+		//emit AuthorizedOperator(operator, _msgSender());
+	}
+
+	/**
+	 * @notice revoke an operator's rights to use _msgSender()'s tokens irrespective of partitions.
+	 * @notice this will revoke ALL operator rights of the _msgSender() however,
+	 * @notice if the operator has been authorized to spend from a partition, this will not revoke those rights.
+	 * @notice see 'revokeOperatorByPartition' to revoke partition specific rights.
+	 * @param operator address to revoke as operator for caller.
+	 */
+	function revokeOperator(address operator) public virtual {
+		_operatorApprovals[_msgSender()][operator] = false;
+		//emit RevokedOperator(operator, _msgSender());
 	}
 
 	function approve(address to, uint256 tokenId) public virtual {
 		address owner = _ownerOf(tokenId);
 		require(to != owner, "ERC1400NFT: approval to current owner");
-
+		///@dev maybe restrict all operator transfers to operatorTransfer so the appropriate events are emitted.
 		require(
 			_msgSender() == owner || isApprovedForAll(owner, _msgSender()),
-			"ERC1400NFT: approve caller is not token owner or approved for all"
+			"ERC1400NFT: caller is not token owner or approved"
 		);
 
 		_approve(to, tokenId);
@@ -196,8 +240,28 @@ contract ERC1400NFT is Context, Ownable2Step, ERC165 {
 	 * Emits an {Approval} event.
 	 */
 	function _approve(address to, uint256 tokenId) internal virtual {
-		_tokenApprovals[tokenId] = to;
+		_tokenApprovalsByPartition[tokenId][DEFAULT_PARTITION] = to;
 
 		//emit Approval(ownerOf(tokenId), to, tokenId);
 	}
+
+	function _beforeTokenTransfer(
+		bytes32 partition,
+		address operator,
+		address from,
+		address to,
+		uint256 tokenId,
+		bytes memory data,
+		bytes memory operatorData
+	) internal virtual {}
+
+	function _afterTokenTransfer(
+		bytes32 partition,
+		address operator,
+		address from,
+		address to,
+		uint256 tokenId,
+		bytes memory data,
+		bytes memory operatorData
+	) internal virtual {}
 }
