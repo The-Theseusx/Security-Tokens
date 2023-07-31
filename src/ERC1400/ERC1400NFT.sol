@@ -70,9 +70,9 @@ contract ERC1400NFT is Context, Ownable2Step, ERC165 {
 	mapping(address => uint256) private _userNonce;
 
 	constructor(string memory name_, string memory symbol_, string memory baseUri_, string memory version_) {
-		require(bytes(name_).length != 0, "ERC1400NFT: name must not be empty");
-		require(bytes(symbol_).length != 0, "ERC1400NFT: symbol must not be empty");
-		require(bytes(version_).length != 0, "ERC1400NFT: version must not be empty");
+		require(bytes(name_).length != 0, "ERC1400NFT: invalid name");
+		require(bytes(symbol_).length != 0, "ERC1400NFT: no symbol");
+		require(bytes(version_).length != 0, "ERC1400NFT: invalid version");
 		_name = name_;
 		_symbol = symbol_;
 		_baseUri = baseUri_;
@@ -116,7 +116,7 @@ contract ERC1400NFT is Context, Ownable2Step, ERC165 {
 	 * @return the total token balance of a user irrespective of partition.
 	 */
 	function balanceOf(address account) public view virtual returns (uint256) {
-		require(account != address(0), "ERC1400NFT: balance query for the zero address");
+		require(account != address(0), "ERC1400NFT: zero address");
 
 		return _balances[account];
 	}
@@ -134,7 +134,7 @@ contract ERC1400NFT is Context, Ownable2Step, ERC165 {
 	 * @return the balance of a user for a given partition, default partition inclusive.
 	 */
 	function balanceOfByPartition(bytes32 partition, address account) public view virtual returns (uint256) {
-		require(account != address(0), "ERC1400NFT: balance query for the zero address");
+		require(account != address(0), "ERC1400NFT: zero address");
 		require(
 			_partitions[_partitionIndex[partition]] == partition || partition == DEFAULT_PARTITION,
 			"ERC1400NFT: nonexistent partition"
