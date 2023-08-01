@@ -299,8 +299,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @return true if @param controller is a controller of this token.
 	 */
 	function isController(address controller) public view virtual returns (bool) {
-		uint256 controllerIndex = _controllerIndex[controller];
-		return _controllers[controllerIndex] == controller;
+		return controller == _controllers[_controllerIndex[controller]];
 	}
 
 	/**
@@ -560,8 +559,8 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		uint256 amount,
 		bytes calldata data
 	) public virtual override {
-		require(_validateData(owner(), from, to, amount, DEFAULT_PARTITION, data), "ERC1400: Invalid data");
-		++_userNonce[owner()];
+		// require(_validateData(owner(), from, to, amount, DEFAULT_PARTITION, data), "ERC1400: Invalid data");
+		// ++_userNonce[owner()];
 		_transferWithData(_msgSender(), from, to, amount, data, "");
 	}
 
@@ -807,9 +806,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 
 			uint256 controllerIndex = _controllerIndex[controllers[i]];
 
-			if (controllerIndex == 0 && _controllers[0] != controllers[i]) {
-				revert("ERC1400: not controller");
-			}
+			require(controllerIndex != 0 || _controllers[0] == controllers[i], "ERC1400: not controller");
 
 			uint256 lastControllerIndex = _controllers.length - 1;
 			address lastController = _controllers[lastControllerIndex];
@@ -972,7 +969,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
-		require(partition != bytes32(0), "ERC1400: Invalid partition (DEFAULT_PARTITION)");
+		require(partition != DEFAULT_PARTITION, "ERC1400: Wrong partition (DEFAULT_PARTITION)");
 		require(_balancesByPartition[from][partition] >= amount, "ERC1400: transfer amount exceeds balance");
 		require(to != address(0), "ERC1400: transfer to the zero address");
 		if (operator != from) {
@@ -1056,14 +1053,9 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		bytes memory operatorData
 	) internal virtual {
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
-		require(
-			_checkOnERC1400Received(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData),
-			"ERC1400: transfer to non ERC1400Receiver implementer"
-		);
 
 		require(_validateData(owner(), from, to, amount, DEFAULT_PARTITION, data), "ERC1400: invalid data");
-		/** @dev prevent zero token transfers (spam transfers) */
-		require(amount != 0, "ERC1400: zero amount");
+		++_userNonce[owner()];
 
 		_transfer(operator, from, to, amount, data, operatorData);
 		emit TransferWithData(_msgSender(), to, amount, data);
