@@ -1133,7 +1133,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	function _issue(address operator, address account, uint256 amount, bytes memory data) internal virtual {
 		require(account != address(0), "ERC1400: Invalid recipient (zero address)");
 		require(_isIssuable, "ERC1400: Token is not issuable");
-		_beforeTokenTransfer(DEFAULT_PARTITION, _msgSender(), address(0), account, amount, data, "");
+		_beforeTokenTransfer(DEFAULT_PARTITION, operator, address(0), account, amount, data, "");
 		require(
 			_checkOnERC1400Received(DEFAULT_PARTITION, operator, address(0), account, amount, data, ""),
 			"ERC1400: transfer to non ERC1400Receiver implementer"
@@ -1145,7 +1145,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		_totalSupplyByPartition[DEFAULT_PARTITION] += amount;
 
 		emit Issued(address(0), account, amount, data);
-		_afterTokenTransfer(DEFAULT_PARTITION, _msgSender(), address(0), account, amount, data, "");
+		_afterTokenTransfer(DEFAULT_PARTITION, operator, address(0), account, amount, data, "");
 	}
 
 	/**
@@ -1165,6 +1165,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	) internal virtual {
 		require(account != address(0), "ERC1400: Invalid recipient (zero address)");
 		require(_isIssuable, "ERC1400: Token is not issuable");
+		require(partition != DEFAULT_PARTITION, "ERC1400: Invalid partition (default)");
 
 		_beforeTokenTransfer(partition, operator, address(0), account, amount, data, "");
 		require(
