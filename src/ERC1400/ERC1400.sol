@@ -39,9 +39,6 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	///@dev token total suppply irrespective of partition.
 	uint256 private _totalSupply;
 
-	///@dev total number of partitions.
-	uint256 private _totalPartitions;
-
 	///@dev mapping of partition to total token supply of partition.
 	mapping(bytes32 => uint256) private _totalSupplyByPartition;
 
@@ -133,6 +130,14 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		_;
 	}
 
+	modifier isValidPartition(bytes32 partition) {
+		require(
+			_partitions[_partitionIndex[partition]] == partition || partition == DEFAULT_PARTITION,
+			"ERC1400: nonexistent partition"
+		);
+		_;
+	}
+
 	// --------------------------------------------------------------- CONSTRUCTOR --------------------------------------------------------------- //
 	constructor(string memory name_, string memory symbol_, string memory version_) EIP712(name_, version_) {
 		require(bytes(name_).length != 0, "ERC1400: name required");
@@ -163,16 +168,12 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		return _controllers.length != 0;
 	}
 
-	/**
-	 * @return the name of the token.
-	 */
+	/// @return the name of the token.
 	function name() public view virtual returns (string memory) {
 		return _name;
 	}
 
-	/**
-	 * @return the symbol of the token, usually a shorter version of the name.
-	 */
+	/// @return the symbol of the token, usually a shorter version of the name.
 	function symbol() public view virtual returns (string memory) {
 		return _symbol;
 	}
@@ -194,76 +195,62 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		return 18;
 	}
 
-	/**
-	 * @return the total number of tokens in existence, irrespective of partition.
-	 */
+	/// @return the total number of tokens in existence, irrespective of partition.
+
 	function totalSupply() public view virtual override returns (uint256) {
 		return _totalSupply;
 	}
 
-	/**
-	 * @return the total number of tokens issued from a given partition, default partition inclusive.
-	 */
-	function totalSupplyByPartition(bytes32 partition) public view virtual returns (uint256) {
+	/// @return the total number of tokens issued from a given partition, default partition inclusive.
+	function totalSupplyByPartition(
+		bytes32 partition
+	) public view virtual isValidPartition(partition) returns (uint256) {
 		return _totalSupplyByPartition[partition];
 	}
 
-	/**
-	 * @return the total number of tokens issued from the default partition.
-	 */
+	/// @return the total number of tokens issued from the default partition.
 	function totalSupplyOfNonPartitioned() public view virtual returns (uint256) {
 		return _totalSupplyByPartition[DEFAULT_PARTITION];
 	}
 
-	/**
-	 * @return the total number of partitions of this token.
-	 */
+	/// @return the total number of partitions of this token excluding the default partition.
 	function totalPartitions() public view virtual returns (uint256) {
-		return _totalPartitions;
+		return _partitions.length;
 	}
 
-	/**
-	 * @return the total token balance of a user irrespective of partition.
-	 */
+	/// @return the total token balance of a user irrespective of partition.
 	function balanceOf(address account) public view virtual override returns (uint256) {
 		return _balances[account];
 	}
 
-	/**
-	 * @return the balance of a user for a given partition, default partition inclusive.
-	 */
-	function balanceOfByPartition(bytes32 partition, address account) public view virtual override returns (uint256) {
+	/// @return the balance of a user for a given partition, default partition inclusive.
+	function balanceOfByPartition(
+		bytes32 partition,
+		address account
+	) public view virtual override isValidPartition(partition) returns (uint256) {
 		return _balancesByPartition[account][partition];
 	}
 
-	/**
-	 * @return the total token balance of a user for the default partition.
-	 */
+	/// @return the total token balance of a user for the default partition.
 	function balanceOfNonPartitioned(address account) public view virtual returns (uint256) {
 		return _balancesByPartition[account][DEFAULT_PARTITION];
 	}
 
-	/**
-	 * @return the allowance of a spender on the default partition.
-	 */
+	/// @return the allowance of a spender on the default partition.
 	function allowance(address owner, address spender) public view virtual returns (uint256) {
 		return _allowanceByPartition[owner][DEFAULT_PARTITION][spender];
 	}
 
-	/**
-	 * @return the allowance of a spender on the partition of the tokenHolder, default partition inclusive.
-	 */
+	/// @return the allowance of a spender on the partition of the tokenHolder, default partition inclusive.
 	function allowanceByPartition(
 		bytes32 partition,
 		address owner,
 		address spender
-	) public view virtual returns (uint256) {
+	) public view virtual isValidPartition(partition) returns (uint256) {
 		return _allowanceByPartition[owner][partition][spender];
 	}
 
-	/**
-	 * @return the list of partitions of @param account.
-	 */
+	/// @return the list of partitions of @param account.
 	function partitionsOf(address account) public view virtual override returns (bytes32[] memory) {
 		return _partitionsOf[account];
 	}
@@ -273,45 +260,39 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @param user the address to check if it is the owner of the partition.
 	 * @return true if the user is the owner of the partition, false otherwise.
 	 */
-	function isUserPartition(bytes32 partition, address user) public view virtual returns (bool) {
+	function isUserPartition(
+		bytes32 partition,
+		address user
+	) public view virtual isValidPartition(partition) returns (bool) {
 		return partition == _partitionsOf[user][_partitionIndexOfUser[user][partition]];
 	}
 
-	/**
-	 * @return if the operator address is allowed to control all tokens of a tokenHolder irrespective of partition.
-	 */
+	/// @return if the operator address is allowed to control all tokens of a tokenHolder irrespective of partition.
+
 	function isOperator(address operator, address account) public view virtual override returns (bool) {
 		return _approvedOperator[account][operator];
 	}
 
-	/**
-	 * @return if the operator address is allowed to control tokens of a partition on behalf of the tokenHolder.
-	 */
+	/// @return if the operator address is allowed to control tokens of a partition on behalf of the tokenHolder.
 	function isOperatorForPartition(
 		bytes32 partition,
 		address operator,
 		address account
-	) public view virtual override returns (bool) {
+	) public view virtual override isValidPartition(partition) returns (bool) {
 		return _approvedOperatorByPartition[account][partition][operator];
 	}
 
-	/**
-	 * @return true if @param controller is a controller of this token.
-	 */
+	/// @return true if @param controller is a controller of this token.
 	function isController(address controller) public view virtual returns (bool) {
 		return controller == _controllers[_controllerIndex[controller]];
 	}
 
-	/**
-	 * @return the list of controllers of this token.
-	 */
+	/// @return the list of controllers of this token.
 	function getControllers() public view virtual returns (address[] memory) {
 		return _controllers;
 	}
 
-	/**
-	 * @return the nonce of a user.
-	 */
+	/// @return the nonce of a user.
 	function getUserNonce(address user) public view virtual returns (uint256) {
 		return _userNonce[user];
 	}
@@ -464,7 +445,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		address to,
 		uint256 amount,
 		bytes calldata data
-	) public virtual override returns (bytes32) {
+	) public virtual override isValidPartition(partition) returns (bytes32) {
 		_transferByPartition(partition, _msgSender(), _msgSender(), to, amount, data, "");
 		return partition;
 	}
@@ -486,7 +467,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		uint256 amount,
 		bytes calldata data,
 		bytes calldata operatorData
-	) public virtual override returns (bytes32) {
+	) public virtual override isValidPartition(partition) returns (bytes32) {
 		require(_approvedOperatorByPartition[from][partition][_msgSender()], "ERC1400: Not authorized operator");
 		_transferByPartition(partition, _msgSender(), from, to, amount, data, operatorData);
 		return partition;
@@ -528,7 +509,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		uint256 amount,
 		bytes calldata data,
 		bytes calldata operatorData
-	) public virtual onlyController {
+	) public virtual onlyController isValidPartition(partition) {
 		_transferByPartition(partition, _msgSender(), from, to, amount, data, operatorData);
 
 		emit ControllerTransferByPartition(partition, _msgSender(), from, to, amount, data, operatorData);
@@ -580,7 +561,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		address to,
 		uint256 amount,
 		bytes calldata data
-	) public virtual returns (bytes32) {
+	) public virtual isValidPartition(partition) returns (bytes32) {
 		if (data.length != 0) {
 			require(_validateData(owner(), from, to, amount, partition, data), "ERC1400: Invalid data");
 			++_userNonce[owner()];
@@ -638,7 +619,11 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @param amount the amount to approve
 	 * @return true if successful
 	 */
-	function approveByPartition(bytes32 partition, address spender, uint256 amount) public virtual returns (bool) {
+	function approveByPartition(
+		bytes32 partition,
+		address spender,
+		uint256 amount
+	) public virtual isValidPartition(partition) returns (bool) {
 		require(partition != DEFAULT_PARTITION, "ERC1400: approveByPartition default partition");
 		_approveByPartition(partition, _msgSender(), spender, amount);
 		return true;
@@ -655,7 +640,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		bytes32 partition,
 		address spender,
 		uint256 addedValue
-	) public virtual returns (bool) {
+	) public virtual isValidPartition(partition) returns (bool) {
 		require(partition != DEFAULT_PARTITION, "ERC1400: default partition");
 		_approveByPartition(
 			partition,
@@ -677,7 +662,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		bytes32 partition,
 		address spender,
 		uint256 subtractedValue
-	) public virtual returns (bool) {
+	) public virtual isValidPartition(partition) returns (bool) {
 		require(partition != DEFAULT_PARTITION, "ERC1400: default partition");
 		_approveByPartition(
 			partition,
@@ -707,7 +692,10 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @param partition the token partition.
 	 * @param operator address to authorize as operator for caller.
 	 */
-	function authorizeOperatorByPartition(bytes32 partition, address operator) public virtual override {
+	function authorizeOperatorByPartition(
+		bytes32 partition,
+		address operator
+	) public virtual override isValidPartition(partition) {
 		require(operator != _msgSender(), "ERC1400: self authorization not allowed");
 		_approvedOperatorByPartition[_msgSender()][partition][operator] = true;
 		emit AuthorizedOperatorByPartition(partition, operator, _msgSender());
@@ -731,7 +719,10 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @param partition the token partition.
 	 * @param operator address to revoke as operator for caller.
 	 */
-	function revokeOperatorByPartition(bytes32 partition, address operator) public virtual override {
+	function revokeOperatorByPartition(
+		bytes32 partition,
+		address operator
+	) public virtual override isValidPartition(partition) {
 		_approvedOperatorByPartition[_msgSender()][partition][operator] = false;
 		emit RevokedOperatorByPartition(partition, operator, _msgSender());
 	}
@@ -882,7 +873,11 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @param amount the amount of tokens to redeem.
 	 * @param data additional data attached to the transfer.
 	 */
-	function redeemByPartition(bytes32 partition, uint256 amount, bytes calldata data) public virtual override {
+	function redeemByPartition(
+		bytes32 partition,
+		uint256 amount,
+		bytes calldata data
+	) public virtual override isValidPartition(partition) {
 		_redeemByPartition(partition, _msgSender(), _msgSender(), amount, data, "");
 	}
 
@@ -901,7 +896,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		uint256 amount,
 		bytes calldata data,
 		bytes calldata operatorData
-	) public virtual override {
+	) public virtual override isValidPartition(partition) {
 		if (partition == DEFAULT_PARTITION) {
 			require(isOperator(_msgSender(), account), "ERC1400: Not an operator");
 			_redeem(_msgSender(), account, amount, data, operatorData);
@@ -942,7 +937,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		uint256 amount,
 		bytes calldata data,
 		bytes calldata operatorData
-	) public virtual onlyController {
+	) public virtual onlyController isValidPartition(partition) {
 		_redeemByPartition(partition, _msgSender(), tokenHolder, amount, data, operatorData);
 
 		emit ControllerRedemptionByPartition(partition, _msgSender(), tokenHolder, amount, data, operatorData);
@@ -1070,7 +1065,6 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 */
 	function _approve(address owner, address spender, uint256 amount) internal virtual {
 		_approveByPartition(DEFAULT_PARTITION, owner, spender, amount);
-		emit Approval(owner, spender, amount, DEFAULT_PARTITION);
 	}
 
 	/**
@@ -1198,7 +1192,6 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 
 			_partitionIndex[partition] = partitions.length;
 			_partitions.push(partition);
-			_totalPartitions += 1;
 
 			///@dev add partition to user's partition list
 			_partitionIndexOfUser[account][partition] = _partitionsOf[account].length;
