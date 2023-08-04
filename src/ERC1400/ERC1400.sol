@@ -1207,11 +1207,11 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 
 	/**
 	 * @notice burns tokens from a recipient's default partition.
-	 * @param operator the address performing the burn
-	 * @param account the address to burn tokens from
-	 * @param amount the amount to burn
-	 * @param data additional data attached to the burn
-	 * @param operatorData additional data attached to the burn by the operator (if any)
+	 * @param operator the address performing the redeem
+	 * @param account the address to redeem tokens from
+	 * @param amount the amount to redeem
+	 * @param data additional data attached to the redeem process
+	 * @param operatorData additional data attached to the redeem process by the operator (if any)
 	 */
 	function _redeem(
 		address operator,
