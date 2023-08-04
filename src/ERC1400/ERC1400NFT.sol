@@ -82,6 +82,11 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	///@dev mapping of used nonces
 	mapping(address => uint256) private _userNonce;
 
+	modifier onlyController() {
+		require(_controllers[_controllerIndex[_msgSender()]] == _msgSender(), "ERC1400: caller is not a controller");
+		_;
+	}
+
 	modifier isValidPartition(bytes32 partition) {
 		require(
 			_partitions[_partitionIndex[partition]] == partition || partition == DEFAULT_PARTITION,
@@ -496,6 +501,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	function _issue(address operator, address account, uint256 tokenId, bytes memory data) internal virtual {
 		require(account != address(0), "ERC1400NFT: Invalid recipient (zero address)");
 		require(_isIssuable, "ERC1400NFT: Token is not issuable");
+		require(!exists(tokenId), "ERC1400NFT: Token already exists");
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, address(0), account, tokenId, data, "");
 		// require(
 		// 	_checkOnERC1400Received(DEFAULT_PARTITION, operator, address(0), account, tokenId, data, ""),
@@ -529,6 +535,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		require(account != address(0), "ERC1400NFT: Invalid recipient (zero address)");
 		require(_isIssuable, "ERC1400NFT: Token is not issuable");
 		require(partition != DEFAULT_PARTITION, "ERC1400NFT: Invalid partition (default)");
+		require(!exists(tokenId), "ERC1400NFT: Token already exists");
 
 		_beforeTokenTransfer(partition, operator, address(0), account, tokenId, data, "");
 		// require(
@@ -575,12 +582,136 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	}
 
 	/**
+	 /**
+	 * @notice allows the owner to issue tokens to an account from the default partition.
+	 * @notice since owner is the only one who can issue tokens, no need to validate data as a signature?
+	 * @param account the address to issue tokens to.
+	 * @param tokenId the tokenId to issue.
+	 * @param data additional data attached to the issue.
+	 */
+	function issue(address account, uint256 tokenId, bytes calldata data) public virtual onlyOwner {
+		_issue(_msgSender(), account, tokenId, data);
+	}
+
+	/**
+	 * @notice allows the owner to issue tokens to an account from a specific partition aside from the default partition.
+	 * @param partition the token partition.
+	 * @param account the address to issue tokens to.
+	 * @param tokenId the tokenId to issue.
+	 * @param data additional data attached to the issue.
+	 */
+	function issueByPartition(
+		bytes32 partition,
+		address account,
+		uint256 tokenId,
+		bytes calldata data
+	) public virtual onlyOwner {
+		require(partition != DEFAULT_PARTITION, "ERC1400: Invalid partition (DEFAULT_PARTITION)");
+		_issueByPartition(partition, _msgSender(), account, tokenId, data);
+	}
+
+	/**
+	 * @notice allows users to redeem token.
+	 * @param tokenId the tokenId to redeem.
+	 * @param data additional data attached to the transfer.
+	 */
+	function redeem(uint256 tokenId, bytes calldata data) public virtual {
+		_redeem(_msgSender(), _msgSender(), tokenId, data, "");
+	}
+
+	/**
+	 * @notice allows authorized users to redeem token on behalf of someone else.
+	 * @param tokenHolder the address to redeem token from.
+	 * @param tokenId the tokenId to redeem.
+	 * @param data additional data attached to the transfer.
+	 */
+	function redeemFrom(address tokenHolder, uint256 tokenId, bytes calldata data) public virtual onlyOwner {
+		_redeem(_msgSender(), tokenHolder, tokenId, data, "");
+	}
+
+	/**
+	 * @notice allows users to redeem token. Redemptions should be approved by the issuer.
+	 * @param partition the token partition to reddem from, this could be the defaul partition.
+	 * @param tokenId the tokenId to redeem.
+	 * @param data additional data attached to the transfer.
+	 */
+	function redeemByPartition(
+		bytes32 partition,
+		uint256 tokenId,
+		bytes calldata data
+	) public virtual isValidPartition(partition) {
+		_redeemByPartition(partition, _msgSender(), _msgSender(), tokenId, data, "");
+	}
+
+	/**
+	 * @param partition the token partition to redeem, this could be the default partition.
+	 * @param account the address to redeem from
+	 * @param tokenId the tokenId to redeem
+	 * @param data redeem data.
+	 * @param operatorData additional data attached by the operator (if any)
+	 * @notice since _msgSender() is supposed to be an authorized operator,
+	 * @param data and @param operatorData would be "" unless the operator wishes to send additional metadata.
+	 */
+	function operatorRedeemByPartition(
+		bytes32 partition,
+		address account,
+		uint256 tokenId,
+		bytes calldata data,
+		bytes calldata operatorData
+	) public virtual isValidPartition(partition) {
+		if (partition == DEFAULT_PARTITION) {
+			require(isOperator(_msgSender(), account), "ERC1400: Not an operator");
+			_redeem(_msgSender(), account, tokenId, data, operatorData);
+			return;
+		}
+		_redeemByPartition(partition, _msgSender(), account, tokenId, data, operatorData);
+	}
+
+	/**
+	 * @notice allows controllers to redeem tokens of the default partition of users.
+	 * @param tokenHolder the address to redeem token from.
+	 * @param tokenId the tokenId to redeem.
+	 * @param data additional data attached to the transfer.
+	 * @param operatorData additional data attached by the operator (if any)
+	 */
+	function controllerRedeem(
+		address tokenHolder,
+		uint256 tokenId,
+		bytes calldata data,
+		bytes calldata operatorData
+	) public virtual onlyController {
+		_redeem(_msgSender(), tokenHolder, tokenId, data, operatorData);
+
+		//emit ControllerRedemption(_msgSender(), tokenHolder, tokenId, data, operatorData);
+	}
+
+	/**
+	 * @notice allows controllers to redeem tokens of a given partition of users.
+	 * @param partition the token partition to redeem.
+	 * @param tokenHolder the address to redeem token from.
+	 * @param tokenId the tokenId to redeem.
+	 * @param data additional data attached to the transfer.
+	 * @param operatorData additional data attached by the operator (if any)
+	 */
+	function controllerRedeemByPartition(
+		bytes32 partition,
+		address tokenHolder,
+		uint256 tokenId,
+		bytes calldata data,
+		bytes calldata operatorData
+	) public virtual onlyController isValidPartition(partition) {
+		_redeemByPartition(partition, _msgSender(), tokenHolder, tokenId, data, operatorData);
+
+		//emit ControllerRedemptionByPartition(partition, _msgSender(), tokenHolder, tokenId, data, operatorData);
+	}
+
+	/**
 	 * @notice burns tokens from a recipient's default partition.
-	 * @param operator the address performing the burn
-	 * @param account the address to burn tokens from
-	 * @param tokenId the tokenId to burn
-	 * @param data additional data attached to the burn
-	 * @param operatorData additional data attached to the burn by the operator (if any)
+	 * @param operator the address performing the redeem
+	 * @param account the address to redeem tokens from
+	 * @param tokenId the tokenId to redeem
+	 * @param data additional data attached to the redeem process
+	 * @param operatorData additional data attached to the redeem  process by the operator (if any)
 	 */
 	function _redeem(
 		address operator,
@@ -598,6 +729,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 				"ERC1400NFT: transfer operator is not authorized"
 			);
 		}
+		require(exists(tokenId), "ERC1400NFT: Token does not exist");
 		require(_owners[tokenId] == account, "ERC1400NFT: Token is not owned by account");
 		require(_balancesByPartition[account][DEFAULT_PARTITION] >= tokenId, "ERC1400NFT: Not enough funds");
 
@@ -640,6 +772,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 				"ERC1400NFT: transfer operator is not authorized"
 			);
 		}
+		require(exists(tokenId), "ERC1400NFT: Token does not exist");
 
 		_balances[account] -= 1;
 		_balancesByPartition[account][partition] -= 1;
@@ -763,6 +896,29 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 				++i;
 			}
 		}
+	}
+
+	/**
+	 * @dev disables issuance of tokens, can only be called by the owner
+	 */
+	function disableIssuance() public virtual onlyOwner {
+		_disableIssuance();
+	}
+
+	/**
+	 * @dev renounce ownership and disables issuance of tokens
+	 */
+	function renounceOwnership() public virtual override onlyOwner {
+		_disableIssuance();
+		super.renounceOwnership();
+	}
+
+	/**
+	 * @dev intenal function to disable issuance of tokens
+	 */
+	function _disableIssuance() internal virtual {
+		_isIssuable = false;
+		//emit IssuanceDisabled();
 	}
 
 	function _beforeTokenTransfer(
