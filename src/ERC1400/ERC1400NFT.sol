@@ -43,9 +43,6 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	///@dev array of token partitions.
 	bytes32[] private _partitions;
 
-	///@dev total number of partitions.
-	uint256 private _totalPartitions;
-
 	///@dev array of token controllers.
 	address[] private _controllers;
 
@@ -84,6 +81,14 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 
 	///@dev mapping of used nonces
 	mapping(address => uint256) private _userNonce;
+
+	modifier isValidPartition(bytes32 partition) {
+		require(
+			_partitions[_partitionIndex[partition]] == partition || partition == DEFAULT_PARTITION,
+			"ERC1400NFT: nonexistent partition"
+		);
+		_;
+	}
 
 	constructor(
 		string memory name_,
@@ -143,36 +148,40 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	}
 
 	/**
-	 * @return the list of partitions of @param account.
+	 * @return the total token balance of a user for the default partition.
 	 */
+	function balanceOfNonPartitioned(address account) public view virtual returns (uint256) {
+		return _balancesByPartition[account][DEFAULT_PARTITION];
+	}
+
+	/// @return the total number of partitions of this token excluding the default partition.
+	function totalPartitions() public view virtual returns (uint256) {
+		return _partitions.length;
+	}
+
+	/// @return the list of partitions of @param account.
 	function partitionsOf(address account) public view virtual returns (bytes32[] memory) {
 		return _partitionsOf[account];
 	}
 
-	///@dev return the partition of a token.
+	/// @dev return the partition of a token.
 	function partitionOfToken(uint256 tokenId) public view virtual returns (bytes32) {
 		require(exists(tokenId), "ERC1400NFT: non-existing token");
 
 		return _partitionOfToken[tokenId];
 	}
 
-	/**
-	 * @return the list of controllers of this token.
-	 */
+	/// @return the list of controllers of this token.
 	function getControllers() public view virtual returns (address[] memory) {
 		return _controllers;
 	}
 
-	/**
-	 * @return true if @param controller is a controller of this token.
-	 */
+	/// @return true if @param controller is a controller of this token.
 	function isController(address controller) public view virtual returns (bool) {
 		return controller == _controllers[_controllerIndex[controller]];
 	}
 
-	/**
-	 * @return the nonce of a user.
-	 */
+	/// @return the nonce of a user.
 	function getUserNonce(address user) public view virtual returns (uint256) {
 		return _userNonce[user];
 	}
@@ -182,23 +191,22 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	 * @param user the address to check if it is the owner of the partition.
 	 * @return true if the user is the owner of the partition, false otherwise.
 	 */
-	function isUserPartition(bytes32 partition, address user) public view virtual returns (bool) {
+	function isUserPartition(
+		bytes32 partition,
+		address user
+	) public view virtual isValidPartition(partition) returns (bool) {
 		return partition == _partitionsOf[user][_partitionIndexOfUser[user][partition]];
 	}
 
-	/**
-	 * @return the balance of a user for a given partition, default partition inclusive.
-	 */
-	function balanceOfByPartition(bytes32 partition, address account) public view virtual returns (uint256) {
+	/// @return the balance of a user for a given partition, default partition inclusive.
+	function balanceOfByPartition(
+		bytes32 partition,
+		address account
+	) public view virtual isValidPartition(partition) returns (uint256) {
 		require(account != address(0), "ERC1400NFT: zero address");
-		require(
-			_partitions[_partitionIndex[partition]] == partition || partition == DEFAULT_PARTITION,
-			"ERC1400NFT: nonexistent partition"
-		);
+
 		return _balancesByPartition[account][partition];
 	}
-
-	///@dev push default partition to index 0 of _partitions array ?
 
 	function tokenURI(uint256 tokenId) public view virtual returns (string memory) {
 		require(exists(tokenId), "ERC1400NFT: tokenId does not exist");
@@ -217,9 +225,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		return owner;
 	}
 
-	/**
-	 * @dev Returns the owner of the `tokenId`. Does NOT revert if token doesn't exist
-	 */
+	/// @dev Returns the owner of the `tokenId`. Does NOT revert if token doesn't exist
 	function _ownerOf(uint256 tokenId) internal view virtual returns (address) {
 		return _owners[tokenId];
 	}
@@ -233,9 +239,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		return _ownerOf(tokenId) != address(0);
 	}
 
-	/**
-	 * @dev Check if an operator is allowed to manage tokens of a given owner irrespective of partitions.
-	 */
+	/// @dev Check if an operator is allowed to manage tokens of a given owner irrespective of partitions.
 	function isApprovedForAll(address owner, address operator) public view virtual returns (bool) {
 		return isOperator(operator, owner);
 	}
@@ -251,7 +255,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		bytes32 partition,
 		address operator,
 		address account
-	) public view virtual returns (bool) {
+	) public view virtual isValidPartition(partition) returns (bool) {
 		return _operatorApprovalsByPartition[account][partition][operator];
 	}
 
@@ -284,7 +288,10 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	 * @param partition the token partition.
 	 * @param operator address to authorize as operator for caller.
 	 */
-	function authorizeOperatorByPartition(bytes32 partition, address operator) public virtual {
+	function authorizeOperatorByPartition(
+		bytes32 partition,
+		address operator
+	) public virtual isValidPartition(partition) {
 		require(operator != _msgSender(), "ERC1400NFT: self authorization not allowed");
 		_operatorApprovalsByPartition[_msgSender()][partition][operator] = true;
 		//emit AuthorizedOperatorByPartition(partition, operator, _msgSender());
@@ -308,32 +315,56 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	 * @param partition the token partition.
 	 * @param operator address to revoke as operator for caller.
 	 */
-	function revokeOperatorByPartition(bytes32 partition, address operator) public virtual {
+	function revokeOperatorByPartition(bytes32 partition, address operator) public virtual isValidPartition(partition) {
 		_operatorApprovalsByPartition[_msgSender()][partition][operator] = false;
 		//emit RevokedOperatorByPartition(partition, operator, _msgSender());
 	}
 
 	function approve(address to, uint256 tokenId) public virtual {
 		address owner = _ownerOf(tokenId);
+		require(_msgSender() == owner, "ERC1400NFT: caller is not token owner ");
 		require(to != owner, "ERC1400NFT: approval to current owner");
-		///@dev maybe restrict all operator transfers to operatorTransfer so the appropriate events are emitted.
-		require(
-			_msgSender() == owner || isApprovedForAll(owner, _msgSender()),
-			"ERC1400NFT: caller is not token owner or approved"
-		);
-
-		_approve(to, tokenId);
+		///@dev restrict all operator transfers to operatorTransfer so the appropriate events are emitted.
+		require(partitionOfToken(tokenId) == DEFAULT_PARTITION, "ERC1400NFT: token is not in the default partition");
+		_approve(owner, to, tokenId);
 	}
 
 	/**
-	 * @dev Approve `to` to operate on `tokenId`
-	 *
-	 * Emits an {Approval} event.
+	 * @notice approve a to to transfer tokens from any partition but the default one.
+	 * @param partition the partition to approve
+	 * @param to the address to approve
+	 * @param tokenId the tokenId to approve
+	 * @return true if successful
 	 */
-	function _approve(address to, uint256 tokenId) internal virtual {
-		_tokenApprovalsByPartition[tokenId][DEFAULT_PARTITION] = to;
+	function approveByPartition(
+		bytes32 partition,
+		address to,
+		uint256 tokenId
+	) public virtual isValidPartition(partition) returns (bool) {
+		require(partition != DEFAULT_PARTITION, "ERC1400NFT: approveByPartition default partition");
+		address owner = _ownerOf(tokenId);
+		require(_msgSender() == owner, "ERC1400NFT: caller is not token owner ");
+		require(to != owner, "ERC1400NFT: approval to current owner");
+		require(partitionOfToken(tokenId) == partition, "ERC1400NFT: not token partition");
 
-		//emit Approval(ownerOf(tokenId), to, tokenId);
+		_approveByPartition(partition, owner, to, tokenId);
+		return true;
+	}
+
+	function _approve(address owner, address to, uint256 tokenId) internal virtual {
+		_approveByPartition(DEFAULT_PARTITION, owner, to, tokenId);
+	}
+
+	/**
+	 * @notice internal approve function for any partition, including the default one
+	 * @param partition the partition to spend tokens from
+	 * @param owner the address that holds the tokens to be spent
+	 * @param to the address that will spend the tokens
+	 * @param tokenId the tokenId of tokens to be spent
+	 */
+	function _approveByPartition(bytes32 partition, address owner, address to, uint256 tokenId) internal virtual {
+		_tokenApprovalsByPartition[tokenId][partition] = to;
+		//emit Approval(owner, to, tokenId, partition);
 	}
 
 	/**
@@ -371,6 +402,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 			_balances[to] += 1;
 		}
 		_owners[tokenId] = to;
+		delete _tokenApprovalsByPartition[tokenId][DEFAULT_PARTITION];
 
 		//emit Transfer(operator, from, to, tokenId, DEFAULT_PARTITION, data, operatorData);
 
@@ -447,6 +479,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		_balancesByPartition[to][partition] += 1;
 		_balances[to] += 1;
 		_owners[tokenId] = to;
+		delete _tokenApprovalsByPartition[tokenId][partition];
 
 		//emit TransferByPartition(partition, operator, from, to, tokenId, data, operatorData);
 
@@ -528,7 +561,6 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 
 			_partitionIndex[partition] = partitions.length;
 			_partitions.push(partition);
-			_totalPartitions += 1;
 
 			///@dev add partition to user's partition list
 			_partitionIndexOfUser[account][partition] = _partitionsOf[account].length;
