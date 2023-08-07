@@ -5,7 +5,7 @@ import { Ownable2Step } from "openzeppelin-contracts/contracts/access/Ownable2St
 import { Context } from "openzeppelin-contracts/contracts/utils/Context.sol";
 import { ERC1643 } from "../ERC1643/ERC1643.sol";
 import { ERC165 } from "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
-import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/draft-EIP712.sol";
+import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import { IERC1400 } from "./IERC1400.sol";
 import { IERC1400Receiver } from "./IERC1400Receiver.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
@@ -27,7 +27,6 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	bool private _isIssuable;
 
 	///@dev token name
-
 	string private _name;
 
 	///@dev token symbol
@@ -842,7 +841,6 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		uint256 amount,
 		bytes calldata data
 	) public virtual override onlyOwner {
-		require(partition != DEFAULT_PARTITION, "ERC1400: Invalid partition (DEFAULT_PARTITION)");
 		_issueByPartition(partition, _msgSender(), account, amount, data);
 	}
 
@@ -1399,9 +1397,8 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 			} else {
 				return true;
 			}
-		} else {
-			return true;
 		}
+		return true;
 	}
 
 	/**
