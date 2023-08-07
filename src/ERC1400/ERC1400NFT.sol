@@ -3,15 +3,16 @@ pragma solidity ^0.8.0;
 import { Ownable2Step } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import { Context } from "openzeppelin-contracts/contracts/utils/Context.sol";
 import { ERC165 } from "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
-import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/draft-EIP712.sol";
+import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import { Strings } from "openzeppelin-contracts/contracts/utils/Strings.sol";
 import { IERC1400NFT } from "./IERC1400NFT.sol";
+import { IERC1400NFTReceiver } from "./IERC1400NFTReceiver.sol";
 
 /**
  * @dev ERC1400NFT compatible with ERC721 for non-fungible security tokens.
  * @dev Each token Id must be unique irrespective of partition.
- * @dev A token id issued to the default partition cannot be issued to any other partition.
+ * @dev A token id issued to a partition cannot be issued to any other partition.
  */
 
 ///@dev use OZ's Context contract
@@ -83,7 +84,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	mapping(address => uint256) private _userNonce;
 
 	modifier onlyController() {
-		require(_controllers[_controllerIndex[_msgSender()]] == _msgSender(), "ERC1400: caller is not a controller");
+		require(_controllers[_controllerIndex[_msgSender()]] == _msgSender(), "ERC1400NFT: caller is not a controller");
 		_;
 	}
 
@@ -189,6 +190,125 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	/// @return the nonce of a user.
 	function getUserNonce(address user) public view virtual returns (uint256) {
 		return _userNonce[user];
+	}
+
+	function _spendNonce(address user) private {
+		///@dev investigate further
+		_userNonce[user] = _userNonce[user] + 1;
+	}
+
+	/**
+	* @notice Error messages:
+	  -IP: Invalid partition
+	  -IS: Invalid sender
+	  -IPB: Insufficient partition balance
+	  -IR: Receiver is invalid
+	  -ID: Invalid transfer data
+	  -IA: Insufficient allowance
+	  -ITID: Insufficient token Id
+
+	 * @param from token holder.
+	 * @param to token recipient.
+	 * @param partition token partition.
+	 * @param tokenId tokenId to transfer.
+	 * @param data information attached to the transfer, by the token holder.
+	 */
+	function canTransferByPartition(
+		address from,
+		address to,
+		bytes32 partition,
+		uint256 tokenId,
+		bytes calldata data
+	) public view virtual returns (bytes memory, bytes32, bytes32) {
+		uint256 index = _partitionIndex[partition];
+		if (_partitions[index] != partition) return ("0x50", "ERC1400NFT: IP", bytes32(0));
+		if (ownerOf(tokenId) != _msgSender()) return ("0x52", "ERC1400NFT: IPB", bytes32(0));
+		if (from == address(0)) return (bytes("0x56"), "ERC1400NFT: IS", bytes32(0));
+		if (to == address(0)) return ("0x57", "ERC1400NFT: IR", bytes32(0));
+		if (to.code.length > 0) {
+			(bool can, ) = _canReceive(partition, _msgSender(), from, to, tokenId, data, "");
+			if (!can) return (bytes("0x57"), "ERC1400NFT: IR", bytes32(0));
+		}
+		if (!exists(tokenId)) return ("0x50", "ERC1400NFT: ITID", bytes32(0));
+		if (getApproved(tokenId) != to) {
+			/** @dev possibly called by an operator or controller, check if the sender is an operator or controller */
+			if (
+				!isOperator(_msgSender(), from) ||
+				!isOperatorForPartition(partition, _msgSender(), from) ||
+				!isController(_msgSender())
+			) {
+				return (bytes("0x53"), "IA", bytes32(0));
+			}
+		}
+		//if (data.length != 0) {
+		// if (_validateData(owner(), from, to, amount, partition, data)) {
+		// 	return ("0x51", "ERC1400NFT: CT", "");
+		// }
+		//return ("0x50", "ERC1400NFT: ID", "");
+		//}
+
+		return ("0x51", "ERC1400NFT: CT", "");
+	}
+
+	/**
+	 * @notice Check if a transfer of tokens of the default partition is possible.
+	 * @param to token recipient.
+	 * @param tokenId the token Id.
+	 * @param data information attached to the transfer, by the token holder.
+	 */
+	function canTransfer(
+		address to,
+		uint256 tokenId,
+		bytes calldata data
+	) public view virtual returns (bool, bytes memory, bytes32) {
+		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
+		if (!exists(tokenId)) return (false, bytes("0x50"), bytes32(0));
+		if (ownerOf(tokenId) != _msgSender()) return (false, bytes("0x52"), bytes32(0));
+		if (to.code.length > 0) {
+			(bool can, ) = _canReceive(DEFAULT_PARTITION, _msgSender(), _msgSender(), to, tokenId, data, "");
+			if (!can) return (false, bytes("0x57"), bytes32(0));
+		}
+
+		return (true, bytes("0x51"), bytes32(0));
+	}
+
+	/**
+	 * @notice Check if a transfer from of tokens of the default partition is possible.
+	 * @param from token holder.
+	 * @param to token recipient.
+	 * @param tokenId the token Id.
+	 * @param data information attached to the transfer.
+	 */
+	function canTransferFrom(
+		address from,
+		address to,
+		uint256 tokenId,
+		bytes calldata data
+	) public view virtual returns (bool, bytes memory, bytes32) {
+		if (from == address(0)) return (false, bytes("0x56"), bytes32(0));
+		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
+		if (to.code.length > 0) {
+			(bool can, ) = _canReceive(DEFAULT_PARTITION, _msgSender(), from, to, tokenId, data, "");
+			if (!can) return (false, bytes("0x57"), bytes32(0));
+		}
+		if (!exists(tokenId)) return (false, bytes("0x50"), bytes32(0));
+		if (getApproved(tokenId) != to) {
+			/** @dev possibly called by an operator or controller, check if the sender is an operator or controller */
+			if (
+				!isOperator(_msgSender(), from) ||
+				!isOperatorForPartition(DEFAULT_PARTITION, _msgSender(), from) ||
+				!isController(_msgSender())
+			) {
+				return (false, bytes("0x53"), bytes32(0));
+			}
+		}
+		if (ownerOf(tokenId) != _msgSender()) return (false, bytes("0x52"), bytes32(0));
+		if (data.length != 0) {
+			if (!_validateData(owner(), from, to, tokenId, DEFAULT_PARTITION, data)) {
+				return (false, bytes("0x5f"), bytes32(0));
+			}
+		}
+		return (true, bytes("0x51"), bytes32(0));
 	}
 
 	/**
@@ -395,10 +515,10 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, 1, data, operatorData);
 		require(_ownerOf(tokenId) == from, "ERC1400NFT: transfer not from token owner");
 
-		// require(
-		// 	_checkOnERC1400Received(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData),
-		// 	"ERC1400NFT: transfer to non ERC1400Receiver implementer"
-		// );
+		require(
+			_checkOnERC1400NFTReceived(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData),
+			"ERC1400NFT: transfer to non ERC1400Receiver implementer"
+		);
 		unchecked {
 			_balancesByPartition[from][DEFAULT_PARTITION] -= 1;
 			_balances[from] -= 1;
@@ -468,10 +588,10 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 
 		_beforeTokenTransfer(partition, operator, from, to, tokenId, data, operatorData);
 		require(_ownerOf(tokenId) == from, "ERC1400NFT: transfer not from token owner");
-		// require(
-		// 	_checkOnERC1400Received(partition, operator, from, to, tokenId, data, operatorData),
-		// 	"ERC1400NFT: transfer to non ERC1400Receiver implementer"
-		// );
+		require(
+			_checkOnERC1400NFTReceived(partition, operator, from, to, tokenId, data, operatorData),
+			"ERC1400NFT: transfer to non ERC1400Receiver implementer"
+		);
 
 		_balancesByPartition[from][partition] -= 1;
 		_balances[from] -= 1;
@@ -503,10 +623,10 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		require(_isIssuable, "ERC1400NFT: Token is not issuable");
 		require(!exists(tokenId), "ERC1400NFT: Token already exists");
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, address(0), account, tokenId, data, "");
-		// require(
-		// 	_checkOnERC1400Received(DEFAULT_PARTITION, operator, address(0), account, tokenId, data, ""),
-		// 	"ERC1400NFT: transfer to non ERC1400Receiver implementer"
-		// );
+		require(
+			_checkOnERC1400NFTReceived(DEFAULT_PARTITION, operator, address(0), account, tokenId, data, ""),
+			"ERC1400NFT: transfer to non ERC1400Receiver implementer"
+		);
 
 		_balances[account] += 1;
 		_balancesByPartition[account][DEFAULT_PARTITION] += 1;
@@ -519,9 +639,9 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 
 	/**
 	 * @notice internal function to issue tokens from any partition but the default one.
-	 * @param partition the partition to issue tokens from
+	 * @param partition the partition to associate @param tokenId with
 	 * @param operator the address performing the issuance
-	 * @param account the address to issue tokens to
+	 * @param account the address to issue token to
 	 * @param tokenId the tokenId to issue
 	 * @param data additional data attached to the issuance
 	 */
@@ -538,10 +658,10 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		require(!exists(tokenId), "ERC1400NFT: Token already exists");
 
 		_beforeTokenTransfer(partition, operator, address(0), account, tokenId, data, "");
-		// require(
-		// 	_checkOnERC1400Received(partition, operator, address(0), account, tokenId, data, ""),
-		// 	"ERC1400NFT: transfer to non ERC1400Receiver implementer"
-		// );
+		require(
+			_checkOnERC1400NFTReceived(partition, operator, address(0), account, tokenId, data, ""),
+			"ERC1400NFT: transfer to non ERC1400Receiver implementer"
+		);
 
 		_balances[account] += 1;
 		_balancesByPartition[account][partition] += 1;
@@ -606,7 +726,6 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		uint256 tokenId,
 		bytes calldata data
 	) public virtual onlyOwner {
-		require(partition != DEFAULT_PARTITION, "ERC1400: Invalid partition (DEFAULT_PARTITION)");
 		_issueByPartition(partition, _msgSender(), account, tokenId, data);
 	}
 
@@ -660,7 +779,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		bytes calldata operatorData
 	) public virtual isValidPartition(partition) {
 		if (partition == DEFAULT_PARTITION) {
-			require(isOperator(_msgSender(), account), "ERC1400: Not an operator");
+			require(isOperator(_msgSender(), account), "ERC1400NFT: Not an operator");
 			_redeem(_msgSender(), account, tokenId, data, operatorData);
 			return;
 		}
@@ -919,6 +1038,80 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	function _disableIssuance() internal virtual {
 		_isIssuable = false;
 		//emit IssuanceDisabled();
+	}
+
+	/**
+	 * @notice checks if @param to can receive ERC1400NFT tokens.
+	 * @param partition the partition @param tokenId is associated to
+	 * @param operator the address performing the transfer
+	 * @param from the address to transfer tokens from
+	 * @param to the address to transfer tokens to, should be a contract
+	 * @param tokenId the tokenId to transfer
+	 * @param data additional data attached to the transfer
+	 * @param operatorData additional data attached to the transfer by the operator (if any)
+	 * @return bool 'true' if @param to can receive ERC1400NFT tokens, 'false' if not with corresponding revert data.
+	 */
+	function _canReceive(
+		bytes32 partition,
+		address operator,
+		address from,
+		address to,
+		uint256 tokenId,
+		bytes memory data,
+		bytes memory operatorData
+	) internal view virtual returns (bool, bytes memory) {
+		try
+			IERC1400NFTReceiver(to).onERC1400NFTReceived(partition, operator, from, to, tokenId, data, operatorData)
+		returns (bytes4 retVal) {
+			return (retVal == IERC1400NFTReceiver.onERC1400NFTReceived.selector, "");
+		} catch (bytes memory reason) {
+			return (false, reason);
+		}
+	}
+
+	/**
+	 * @notice hook to be called to check if @param to can receive ERC1400NFT tokens. Reverts if not.
+	 * @param partition the partition @param tokenId is associated to
+	 * @param operator the address performing the transfer
+	 * @param from the address to transfer tokens from
+	 * @param to the address to transfer tokens to
+	 * @param tokenId the tokenId to transfer
+	 * @param data additional data attached to the transfer
+	 * @param operatorData additional data attached to the transfer by the operator (if any)
+	 */
+	function _checkOnERC1400NFTReceived(
+		bytes32 partition,
+		address operator,
+		address from,
+		address to,
+		uint256 tokenId,
+		bytes memory data,
+		bytes memory operatorData
+	) private view returns (bool) {
+		if (to.code.length > 0) {
+			(bool success, bytes memory reason) = _canReceive(
+				partition,
+				operator,
+				from,
+				to,
+				tokenId,
+				data,
+				operatorData
+			);
+			if (!success) {
+				if (reason.length == 0) {
+					revert("ERC1400NFT: transfer to non ERC1400NFTReceiver implementer");
+				} else {
+					//solhint-disable no-inline-assembly
+					assembly {
+						revert(add(32, reason), mload(reason))
+					}
+				}
+			} else {
+				return true;
+			}
+		}
+		return true;
 	}
 
 	function _beforeTokenTransfer(
