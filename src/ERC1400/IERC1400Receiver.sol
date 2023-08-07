@@ -16,7 +16,7 @@ interface IERC1400Receiver {
 	//     address operator,
 	//     address from,
 	//     bytes32[] calldata partitions,
-	//     uint256[] calldata values,
+	//     uint256[] calldata amounts,
 	//     bytes calldata data,
 	//     bytes calldata operatorData
 	// ) external returns (bytes4);
