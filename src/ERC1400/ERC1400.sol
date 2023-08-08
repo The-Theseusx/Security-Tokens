@@ -21,7 +21,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	bytes32 public constant ERC1400_DATA_VALIDATION_HASH =
 		keccak256("ERC1400ValidateData(address from,address to,uint256 amount,bytes32 partition,uint256 nonce)");
 
-	// --------------------------------------------------------------- PRIVATE STATE VARIABLES --------------------------------------------------------------- //
+	// --------------------------------------------------------- PRIVATE STATE VARIABLES --------------------------------------------------------- //
 
 	///@dev should track if token is issuable or not. Should not be modifiable if false.
 	bool private _isIssuable;
@@ -123,6 +123,9 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		bytes data,
 		bytes operatorData
 	);
+	event NonceSpent(address indexed user, uint256 nonceSpent);
+
+	// --------------------------------------------------------------- MODIFIERS --------------------------------------------------------------- //
 
 	modifier onlyController() {
 		require(_controllers[_controllerIndex[_msgSender()]] == _msgSender(), "ERC1400: caller is not a controller");
@@ -138,6 +141,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	// --------------------------------------------------------------- CONSTRUCTOR --------------------------------------------------------------- //
+
 	constructor(string memory name_, string memory symbol_, string memory version_) EIP712(name_, version_) {
 		require(bytes(name_).length != 0, "ERC1400: name required");
 		require(bytes(symbol_).length != 0, "ERC1400: symbol required");
@@ -150,6 +154,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	// --------------------------------------------------------------- PUBLIC GETTERS --------------------------------------------------------------- //
+
 	function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
 		return interfaceId == type(IERC1400).interfaceId || super.supportsInterface(interfaceId);
 	}
@@ -267,7 +272,6 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	/// @return if the operator address is allowed to control all tokens of a tokenHolder irrespective of partition.
-
 	function isOperator(address operator, address account) public view virtual override returns (bool) {
 		return _approvedOperator[account][operator];
 	}
@@ -339,6 +343,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 				return (bytes("0x53"), "IA", bytes32(0));
 			}
 		}
+		///@dev add a can transfer with data function???
 		//if (data.length != 0) {
 		// if (_validateData(owner(), from, to, amount, partition, data)) {
 		// 	return ("0x51", "ERC1400: CT", "");
@@ -433,7 +438,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	/**
-	 * @notice since _msgSender() is the token holder, this argument would be empty ("") unless the token holder wishes to send additional metadata.
+	 * @notice since _msgSender() is the token holder, the data argument would be empty ("") unless the token holder wishes to send additional metadata.
 	 * @param partition the token partition to transfer
 	 * @param to the address to transfer to
 	 * @param amount the amount to transfer
@@ -539,8 +544,6 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		uint256 amount,
 		bytes calldata data
 	) public virtual override {
-		// require(_validateData(owner(), from, to, amount, DEFAULT_PARTITION, data), "ERC1400: Invalid data");
-		// ++_userNonce[owner()];
 		_transferWithData(_msgSender(), from, to, amount, data, "");
 	}
 
@@ -563,7 +566,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	) public virtual isValidPartition(partition) returns (bytes32) {
 		if (data.length != 0) {
 			require(_validateData(owner(), from, to, amount, partition, data), "ERC1400: Invalid data");
-			++_userNonce[owner()];
+			_spendNonce(owner());
 			_transferByPartition(partition, _msgSender(), from, to, amount, data, "");
 			return partition;
 		}
@@ -814,6 +817,21 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		}
 	}
 
+	/**
+	 * @dev disables issuance of tokens, can only be called by the owner
+	 */
+	function disableIssuance() public virtual onlyOwner {
+		_disableIssuance();
+	}
+
+	/**
+	 * @dev renounce ownership and disables issuance of tokens
+	 */
+	function renounceOwnership() public virtual override onlyOwner {
+		_disableIssuance();
+		super.renounceOwnership();
+	}
+
 	// -------------------------------------------------------------------- ISSUANCE -------------------------------------------------------------------- //
 
 	/**
@@ -991,6 +1009,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 
 		_balancesByPartition[to][partition] += amount;
 		_balances[to] += amount;
+
 		emit TransferByPartition(partition, operator, from, to, amount, data, operatorData);
 
 		_afterTokenTransfer(partition, operator, from, to, amount, data, operatorData);
@@ -1048,7 +1067,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 
 		require(_validateData(owner(), from, to, amount, DEFAULT_PARTITION, data), "ERC1400: invalid data");
-		++_userNonce[owner()];
+		_spendNonce(owner());
 
 		_transfer(operator, from, to, amount, data, operatorData);
 		emit TransferWithData(_msgSender(), to, amount, data);
@@ -1303,23 +1322,14 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	/**
-	 * @dev disables issuance of tokens, can only be called by the owner
+	 * @notice increase the nonce of a user usually after a transaction signature has been validated
 	 */
-	function disableIssuance() public virtual onlyOwner {
-		_disableIssuance();
+	function _spendNonce(address user) private {
+		uint256 nonce = ++_userNonce[user];
+		emit NonceSpent(user, nonce - 1);
 	}
 
-	/**
-	 * @dev renounce ownership and disables issuance of tokens
-	 */
-	function renounceOwnership() public virtual override onlyOwner {
-		_disableIssuance();
-		super.renounceOwnership();
-	}
-
-	/**
-	 * @dev intenal function to disable issuance of tokens
-	 */
+	/// @dev intenal function to disable issuance of tokens
 	function _disableIssuance() internal virtual {
 		_isIssuable = false;
 		emit IssuanceDisabled();
