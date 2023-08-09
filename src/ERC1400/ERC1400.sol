@@ -548,7 +548,8 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	/**
-	 * @notice since an authorized body might be forcing a token transfer from a different address, the @param data could be a signature authorizing the transfer.
+	 * @notice since an authorized body might be forcing a token transfer from a different address, 
+	   the @param data could be a signature authorizing the transfer.
 	 * @notice in the case of a forced transfer, the data would be a signature authorizing the transfer hence the data must be validated.
 	 * @notice if it is a normal transferFrom, the operator data would be empty ("").
 	 * @param partition the token partition to transfer
