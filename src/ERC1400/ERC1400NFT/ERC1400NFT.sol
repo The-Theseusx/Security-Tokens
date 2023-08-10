@@ -368,12 +368,12 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 				return (bytes("0x53"), "IA", bytes32(0));
 			}
 		}
-		//if (data.length != 0) {
-		// if (_validateData(owner(), from, to, tokenId, partition, data)) {
-		// 	return ("0x51", "ERC1400NFT: CT", "");
-		// }
-		//return ("0x50", "ERC1400NFT: ID", "");
-		//}
+		if (data.length != 0) {
+			if (_validateData(owner(), from, to, tokenId, partition, data)) {
+				return ("0x51", "ERC1400NFT: CT", "");
+			}
+			return ("0x5f", "ERC1400NFT: ID", "");
+		}
 
 		return ("0x51", "ERC1400NFT: CT", "");
 	}
@@ -437,6 +437,55 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 			}
 		}
 		return (true, bytes("0x51"), bytes32(0));
+	}
+
+	/**
+	 * @notice considering the various ERC1400 interface 'can Transfer' methods return different messages, this method tries to standardize that.
+	 * @param partition the partition @param tokenId is associated with.
+	 * @param from the address to transfer from
+	 * @param to the address to transfer to
+	 * @param tokenId the tokenId to transfer
+	 * @param data transfer data.
+	 * @param validateData if true, will validate the data as a signature authorizing the transfer.
+	 * @param data the data to validate as a signature authorizing the transfer or extra metadata to go with the transfer.
+	 * @return bool if the transfer is possible with no error message else false with the error message.
+	 */
+	function canTransfer(
+		bytes32 partition,
+		address from,
+		address to,
+		uint256 tokenId,
+		bool validateData,
+		bytes calldata data
+	) public view virtual returns (bool, string memory) {
+		bytes memory message;
+
+		if (partition == DEFAULT_PARTITION) {
+			if (from == to) {
+				(bool can, bytes memory returnedMessage, ) = canTransfer(to, tokenId, data);
+				if (can) return (true, "");
+				message = returnedMessage;
+			} else {
+				(bool can, bytes memory returnedMessage, ) = canTransferFrom(from, to, tokenId, data);
+				if (can) return (true, "");
+				message = returnedMessage;
+			}
+		} else {
+			(bytes memory returnedMessage, , ) = canTransferByPartition(from, to, partition, tokenId, data);
+			if (keccak256(returnedMessage) == keccak256("0x51")) return (true, "");
+			message = returnedMessage;
+		}
+
+		if (keccak256(message) == keccak256("0x50")) return (false, "ERC1400NFT: Token does not exist");
+		if (keccak256(message) == keccak256("0x52")) return (false, "ERC1400NFT: Not token owner");
+		if (keccak256(message) == keccak256("0x57")) return (false, "ERC1400NFT: Cannot receive");
+		if (keccak256(message) == keccak256("0x53")) return (false, "ERC1400NFT: Spender not approved");
+		if (keccak256(message) == keccak256("0x56")) return (false, "ERC1400NFT: Invalid sender");
+		if (keccak256(message) == keccak256("0x5f")) {
+			return validateData ? (false, "ERC1400NFT: Invalid transfer data") : (true, "");
+		}
+
+		return (false, "ERC1400NFT: Failed with unknown error");
 	}
 
 	// --------------------------------------------------------------- TRANSFERS --------------------------------------------------------------- //
