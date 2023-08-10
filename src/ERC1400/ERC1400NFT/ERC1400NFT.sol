@@ -3,6 +3,8 @@ pragma solidity ^0.8.0;
 import { Ownable2Step } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import { Context } from "openzeppelin-contracts/contracts/utils/Context.sol";
 import { ERC165 } from "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
+
+import { ERC1643 } from "../../ERC1643/ERC1643.sol";
 import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import { Strings } from "openzeppelin-contracts/contracts/utils/Strings.sol";
@@ -15,8 +17,7 @@ import { IERC1400NFTReceiver } from "./IERC1400NFTReceiver.sol";
  * @dev A token id issued to a partition cannot be issued to any other partition.
  */
 
-///@dev use OZ's Context contract
-contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
+contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	using Strings for uint256;
 
 	// --------------------------------------------------------------- CONSTANTS --------------------------------------------------------------- //
@@ -87,6 +88,40 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	mapping(address => uint256) private _userNonce;
 
 	// --------------------------------------------------------------- EVENTS --------------------------------------------------------------- //
+	///@dev event emitted when tokens are transferred with data attached
+	event TransferWithData(address indexed from, address indexed to, uint256 tokenId, bytes data);
+
+	///@dev event emitted when issuance is disabled
+	event IssuanceDisabled();
+	event Transfer(
+		address operator,
+		address indexed from,
+		address indexed to,
+		uint256 tokenId,
+		bytes32 indexed partition,
+		bytes data,
+		bytes operatorData
+	);
+	event Approval(address indexed owner, address indexed spender, uint256 tokenId, bytes32 indexed partition);
+	event ControllerAdded(address indexed controller);
+	event ControllerRemoved(address indexed controller);
+	event ControllerTransferByPartition(
+		bytes32 indexed partition,
+		address indexed controller,
+		address indexed from,
+		address to,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
+	event ControllerRedemptionByPartition(
+		bytes32 indexed partition,
+		address indexed controller,
+		address indexed tokenHolder,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
 
 	event NonceSpent(address indexed user, uint256 nonceSpent);
 
@@ -138,7 +173,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	}
 
 	/// @return true if more tokens can be issued by the issuer, false otherwise.
-	function isIssuable() public view virtual returns (bool) {
+	function isIssuable() public view virtual override returns (bool) {
 		return _isIssuable;
 	}
 
@@ -146,7 +181,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	 * @dev Check whether the token is controllable by authorized controllers.
 	 * @return bool 'true' if the token is controllable
 	 */
-	function isControllable() public view virtual returns (bool) {
+	function isControllable() public view virtual override returns (bool) {
 		return _controllers.length != 0;
 	}
 
@@ -168,7 +203,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	/**
 	 * @return the total token balance of a user irrespective of partition.
 	 */
-	function balanceOf(address account) public view virtual returns (uint256) {
+	function balanceOf(address account) public view virtual override returns (uint256) {
 		require(account != address(0), "ERC1400NFT: zero address");
 
 		return _balances[account];
@@ -178,7 +213,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	function balanceOfByPartition(
 		bytes32 partition,
 		address account
-	) public view virtual isValidPartition(partition) returns (uint256) {
+	) public view virtual override isValidPartition(partition) returns (uint256) {
 		require(account != address(0), "ERC1400NFT: zero address");
 
 		return _balancesByPartition[account][partition];
@@ -197,7 +232,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	}
 
 	/// @return the list of partitions of @param account.
-	function partitionsOf(address account) public view virtual returns (bytes32[] memory) {
+	function partitionsOf(address account) public view virtual override returns (bytes32[] memory) {
 		return _partitionsOf[account];
 	}
 
@@ -269,7 +304,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 
 	/// @return if the operator address is allowed to control all tokens of a tokenHolder irrespective of partition.
 
-	function isOperator(address operator, address account) public view virtual returns (bool) {
+	function isOperator(address operator, address account) public view virtual override returns (bool) {
 		return _operatorApprovals[account][operator];
 	}
 
@@ -280,7 +315,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		bytes32 partition,
 		address operator,
 		address account
-	) public view virtual isValidPartition(partition) returns (bool) {
+	) public view virtual override isValidPartition(partition) returns (bool) {
 		return _operatorApprovalsByPartition[account][partition][operator];
 	}
 
@@ -312,7 +347,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		bytes32 partition,
 		uint256 tokenId,
 		bytes calldata data
-	) public view virtual returns (bytes memory, bytes32, bytes32) {
+	) public view virtual override returns (bytes memory, bytes32, bytes32) {
 		uint256 index = _partitionIndex[partition];
 		if (_partitions[index] != partition) return ("0x50", "ERC1400NFT: IP", bytes32(0));
 		if (ownerOf(tokenId) != _msgSender()) return ("0x52", "ERC1400NFT: IPB", bytes32(0));
@@ -334,7 +369,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 			}
 		}
 		//if (data.length != 0) {
-		// if (_validateData(owner(), from, to, amount, partition, data)) {
+		// if (_validateData(owner(), from, to, tokenId, partition, data)) {
 		// 	return ("0x51", "ERC1400NFT: CT", "");
 		// }
 		//return ("0x50", "ERC1400NFT: ID", "");
@@ -353,7 +388,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		address to,
 		uint256 tokenId,
 		bytes calldata data
-	) public view virtual returns (bool, bytes memory, bytes32) {
+	) public view virtual override returns (bool, bytes memory, bytes32) {
 		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
 		if (!exists(tokenId)) return (false, bytes("0x50"), bytes32(0));
 		if (ownerOf(tokenId) != _msgSender()) return (false, bytes("0x52"), bytes32(0));
@@ -377,7 +412,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		address to,
 		uint256 tokenId,
 		bytes calldata data
-	) public view virtual returns (bool, bytes memory, bytes32) {
+	) public view virtual override returns (bool, bytes memory, bytes32) {
 		if (from == address(0)) return (false, bytes("0x56"), bytes32(0));
 		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
 		if (to.code.length > 0) {
@@ -406,6 +441,16 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 
 	// --------------------------------------------------------------- TRANSFERS --------------------------------------------------------------- //
 	/**
+	 * @notice transfer tokens from the default partition with additional data.
+	 * @param to the address to transfer tokens to
+	 * @param tokenId the tokenId to transfer
+	 * @param data transfer data.
+	 */
+	function transferWithData(address to, uint256 tokenId, bytes calldata data) public virtual override {
+		_transferWithData(_msgSender(), _msgSender(), to, tokenId, data, "");
+	}
+
+	/**
 	 * @param from the address to transfer @param tokenId from
 	 * @param to the address to transfer @param tokenId to
 	 * @param tokenId the transfer to transfer
@@ -422,7 +467,12 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	 * @param tokenId the id of the token to transfer
 	 * @param data transfer data to be validated.
 	 */
-	function transferFromWithData(address from, address to, uint256 tokenId, bytes calldata data) public virtual {
+	function transferFromWithData(
+		address from,
+		address to,
+		uint256 tokenId,
+		bytes calldata data
+	) public virtual override {
 		_transferWithData(_msgSender(), from, to, tokenId, data, "");
 	}
 
@@ -438,7 +488,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		address to,
 		uint256 tokenId,
 		bytes calldata data
-	) public virtual isValidPartition(partition) returns (bytes32) {
+	) public virtual override isValidPartition(partition) returns (bytes32) {
 		_transferByPartition(partition, _msgSender(), _msgSender(), to, tokenId, data, "");
 		return partition;
 	}
@@ -492,7 +542,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		uint256 tokenId,
 		bytes calldata data,
 		bytes calldata operatorData
-	) public virtual isValidPartition(partition) returns (bytes32) {
+	) public virtual override isValidPartition(partition) returns (bytes32) {
 		require(_operatorApprovalsByPartition[from][partition][_msgSender()], "ERC1400NFT: Not authorized operator");
 		_transferByPartition(partition, _msgSender(), from, to, tokenId, data, operatorData);
 		return partition;
@@ -512,10 +562,10 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		uint256 tokenId,
 		bytes calldata data,
 		bytes calldata operatorData
-	) public virtual onlyController {
+	) public virtual override onlyController {
 		_transfer(_msgSender(), from, to, tokenId, data, operatorData);
 
-		//emit ControllerTransfer(_msgSender(), from, to, tokenId, data, operatorData);
+		emit ControllerTransfer(_msgSender(), from, to, tokenId, data, operatorData);
 	}
 
 	/**
@@ -537,7 +587,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	) public virtual onlyController isValidPartition(partition) {
 		_transferByPartition(partition, _msgSender(), from, to, tokenId, data, operatorData);
 
-		//emit ControllerTransferByPartition(partition, _msgSender(), from, to, tokenId, data, operatorData);
+		emit ControllerTransferByPartition(partition, _msgSender(), from, to, tokenId, data, operatorData);
 	}
 
 	// -------------------------------------------- APPROVALS, ALLOWANCES & OPERATORS -------------------------------------------- //
@@ -584,10 +634,10 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	 * @notice this includes burning tokens on behalf of the token holder.
 	 * @param operator address to authorize as operator for caller.
 	 */
-	function authorizeOperator(address operator) public virtual {
+	function authorizeOperator(address operator) public virtual override {
 		require(operator != _msgSender(), "ERC1400NFT: self authorization not allowed");
 		_operatorApprovals[_msgSender()][operator] = true;
-		//emit AuthorizedOperator(operator, _msgSender());
+		emit AuthorizedOperator(operator, _msgSender());
 	}
 
 	/**
@@ -600,10 +650,10 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	function authorizeOperatorByPartition(
 		bytes32 partition,
 		address operator
-	) public virtual isValidPartition(partition) {
+	) public virtual override isValidPartition(partition) {
 		require(operator != _msgSender(), "ERC1400NFT: self authorization not allowed");
 		_operatorApprovalsByPartition[_msgSender()][partition][operator] = true;
-		//emit AuthorizedOperatorByPartition(partition, operator, _msgSender());
+		emit AuthorizedOperatorByPartition(partition, operator, _msgSender());
 	}
 
 	/**
@@ -613,9 +663,9 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	 * @notice see 'revokeOperatorByPartition' to revoke partition specific rights.
 	 * @param operator address to revoke as operator for caller.
 	 */
-	function revokeOperator(address operator) public virtual {
+	function revokeOperator(address operator) public virtual override {
 		_operatorApprovals[_msgSender()][operator] = false;
-		//emit RevokedOperator(operator, _msgSender());
+		emit RevokedOperator(operator, _msgSender());
 	}
 
 	/**
@@ -624,9 +674,12 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	 * @param partition the token partition.
 	 * @param operator address to revoke as operator for caller.
 	 */
-	function revokeOperatorByPartition(bytes32 partition, address operator) public virtual isValidPartition(partition) {
+	function revokeOperatorByPartition(
+		bytes32 partition,
+		address operator
+	) public virtual override isValidPartition(partition) {
 		_operatorApprovalsByPartition[_msgSender()][partition][operator] = false;
-		//emit RevokedOperatorByPartition(partition, operator, _msgSender());
+		emit RevokedOperatorByPartition(partition, operator, _msgSender());
 	}
 
 	/**
@@ -647,7 +700,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 
 			_controllers.push(controllers[i]);
 			_controllerIndex[controllers[i]] = newControllerIndex;
-			//emit ControllerAdded(controllers[i]);
+			emit ControllerAdded(controllers[i]);
 
 			unchecked {
 				++i;
@@ -677,7 +730,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 			delete _controllerIndex[controllers[i]];
 			_controllers.pop();
 
-			//emit ControllerRemoved(controllers[i]);
+			emit ControllerRemoved(controllers[i]);
 
 			unchecked {
 				++i;
@@ -742,7 +795,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	 * @param tokenId the tokenId to issue.
 	 * @param data additional data attached to the issue.
 	 */
-	function issue(address account, uint256 tokenId, bytes calldata data) public virtual onlyOwner {
+	function issue(address account, uint256 tokenId, bytes calldata data) public virtual override onlyOwner {
 		_issue(_msgSender(), account, tokenId, data);
 	}
 
@@ -758,7 +811,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		address account,
 		uint256 tokenId,
 		bytes calldata data
-	) public virtual onlyOwner {
+	) public virtual override onlyOwner {
 		_issueByPartition(partition, _msgSender(), account, tokenId, data);
 	}
 
@@ -769,7 +822,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	 * @param tokenId the tokenId to redeem.
 	 * @param data additional data attached to the transfer.
 	 */
-	function redeem(uint256 tokenId, bytes calldata data) public virtual {
+	function redeem(uint256 tokenId, bytes calldata data) public virtual override {
 		_redeem(_msgSender(), _msgSender(), tokenId, data, "");
 	}
 
@@ -779,7 +832,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	 * @param tokenId the tokenId to redeem.
 	 * @param data additional data attached to the transfer.
 	 */
-	function redeemFrom(address tokenHolder, uint256 tokenId, bytes calldata data) public virtual onlyOwner {
+	function redeemFrom(address tokenHolder, uint256 tokenId, bytes calldata data) public virtual override onlyOwner {
 		_redeem(_msgSender(), tokenHolder, tokenId, data, "");
 	}
 
@@ -793,7 +846,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		bytes32 partition,
 		uint256 tokenId,
 		bytes calldata data
-	) public virtual isValidPartition(partition) {
+	) public virtual override isValidPartition(partition) {
 		_redeemByPartition(partition, _msgSender(), _msgSender(), tokenId, data, "");
 	}
 
@@ -812,7 +865,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		uint256 tokenId,
 		bytes calldata data,
 		bytes calldata operatorData
-	) public virtual isValidPartition(partition) {
+	) public virtual override isValidPartition(partition) {
 		if (partition == DEFAULT_PARTITION) {
 			require(isOperator(_msgSender(), account), "ERC1400NFT: Not an operator");
 			_redeem(_msgSender(), account, tokenId, data, operatorData);
@@ -833,10 +886,10 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		uint256 tokenId,
 		bytes calldata data,
 		bytes calldata operatorData
-	) public virtual onlyController {
+	) public virtual override onlyController {
 		_redeem(_msgSender(), tokenHolder, tokenId, data, operatorData);
 
-		//emit ControllerRedemption(_msgSender(), tokenHolder, tokenId, data, operatorData);
+		emit ControllerRedemption(_msgSender(), tokenHolder, tokenId, data, operatorData);
 	}
 
 	/**
@@ -856,7 +909,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	) public virtual onlyController isValidPartition(partition) {
 		_redeemByPartition(partition, _msgSender(), tokenHolder, tokenId, data, operatorData);
 
-		//emit ControllerRedemptionByPartition(partition, _msgSender(), tokenHolder, tokenId, data, operatorData);
+		emit ControllerRedemptionByPartition(partition, _msgSender(), tokenHolder, tokenId, data, operatorData);
 	}
 
 	// ------------------------------------------------------- INTERNAL & PRIVATE FUNCTIONS ------------------------------------------------------- //
@@ -898,7 +951,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		_owners[tokenId] = to;
 		delete _tokenApprovalsByPartition[tokenId][DEFAULT_PARTITION];
 
-		//emit Transfer(operator, from, to, tokenId, DEFAULT_PARTITION, data, operatorData);
+		emit Transfer(operator, from, to, tokenId, DEFAULT_PARTITION, data, operatorData);
 
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData);
 	}
@@ -921,6 +974,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 
 		_transfer(operator, from, to, tokenId, data, operatorData);
 		//emit TransferWithData(_msgSender(), to, tokenId, data);
+
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData);
 	}
 
@@ -993,7 +1047,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	 */
 	function _approveByPartition(bytes32 partition, address owner, address to, uint256 tokenId) internal virtual {
 		_tokenApprovalsByPartition[tokenId][partition] = to;
-		//emit Approval(owner, to, tokenId, partition);
+		emit Approval(owner, to, tokenId, partition);
 	}
 
 	/**
@@ -1018,7 +1072,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		_partitionOfToken[tokenId] = DEFAULT_PARTITION;
 		_owners[tokenId] = account;
 
-		//emit Issued(address(0), account, tokenId, data);
+		emit Issued(address(0), account, tokenId, data);
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, address(0), account, tokenId, data, "");
 	}
 
@@ -1053,9 +1107,9 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		_partitionOfToken[tokenId] = partition;
 		_owners[tokenId] = account;
 
-		//_addTokenToPartitionList(partition, account);
+		_addTokenToPartitionList(partition, account);
 
-		//emit IssuedByPartition(partition, account, tokenId, data);
+		emit IssuedByPartition(partition, account, tokenId, data);
 		_afterTokenTransfer(partition, operator, address(0), account, tokenId, data, "");
 	}
 
@@ -1122,7 +1176,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 
 		///@dev what else to delete?
 
-		//emit Redeemed(operator, account, tokenId, data);
+		emit Redeemed(operator, account, tokenId, data);
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, account, address(0), tokenId, data, operatorData);
 	}
 
@@ -1161,7 +1215,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 		delete _owners[tokenId];
 		delete _tokenApprovalsByPartition[tokenId][partition];
 
-		//emit RedeemedByPartition(partition, operator, account, tokenId, data, operatorData);
+		emit RedeemedByPartition(partition, operator, account, tokenId, data, operatorData);
 		_afterTokenTransfer(partition, operator, account, address(0), tokenId, data, operatorData);
 	}
 
@@ -1201,7 +1255,7 @@ contract ERC1400NFT is Context, Ownable2Step, EIP712, ERC165 {
 	 */
 	function _disableIssuance() internal virtual {
 		_isIssuable = false;
-		//emit IssuanceDisabled();
+		emit IssuanceDisabled();
 	}
 
 	function _changeBaseURI(string memory baseUri_) internal virtual {
