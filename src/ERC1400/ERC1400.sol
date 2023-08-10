@@ -97,13 +97,6 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		bytes operatorData
 	);
 	event Approval(address indexed owner, address indexed spender, uint256 amount, bytes32 indexed partition);
-	event Issued(
-		address indexed issuer,
-		address indexed to,
-		uint256 amount,
-		bytes32 indexed partition,
-		bytes32 operatorData
-	);
 	event ControllerAdded(address indexed controller);
 	event ControllerRemoved(address indexed controller);
 	event ControllerTransferByPartition(
