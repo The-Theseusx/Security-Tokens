@@ -336,13 +336,12 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 				return (bytes("0x53"), "IA", bytes32(0));
 			}
 		}
-		///@dev add a can transfer with data function???
-		//if (data.length != 0) {
-		// if (_validateData(owner(), from, to, amount, partition, data)) {
-		// 	return ("0x51", "ERC1400: CT", "");
-		// }
-		//return ("0x50", "ERC1400: ID", "");
-		//}
+		if (data.length != 0) {
+			if (_validateData(owner(), from, to, amount, partition, data)) {
+				return ("0x51", "ERC1400: CT", "");
+			}
+			return ("0x50", "ERC1400: ID", "");
+		}
 
 		return ("0x51", "ERC1400: CT", "");
 	}
@@ -406,6 +405,56 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 			}
 		}
 		return (true, bytes("0x51"), bytes32(0));
+	}
+
+	/**
+	/**
+	 * @notice considering the various ERC1400 interface 'can Transfer' methods return different messages, this method tries to standardize that.
+	 * @param partition the partition to execute the transfer on.
+	 * @param from the address to transfer from
+	 * @param to the address to transfer to
+	 * @param amount the amount of tokens to transfer
+	 * @param data transfer data.
+	 * @param validateData if true, will validate the data as a signature authorizing the transfer.
+	 * @param data the data to validate as a signature authorizing the transfer or extra metadata to go with the transfer.
+	 * @return bool if the transfer is possible with no error message else false with the error message.
+	 */
+	function canTransfer(
+		bytes32 partition,
+		address from,
+		address to,
+		uint256 amount,
+		bool validateData,
+		bytes calldata data
+	) public view virtual returns (bool, string memory) {
+		bytes memory message;
+
+		if (partition == DEFAULT_PARTITION) {
+			if (from == to) {
+				(bool can, bytes memory returnedMessage, ) = canTransfer(to, amount, data);
+				if (can) return (true, "");
+				message = returnedMessage;
+			} else {
+				(bool can, bytes memory returnedMessage, ) = canTransferFrom(from, to, amount, data);
+				if (can) return (true, "");
+				message = returnedMessage;
+			}
+		} else {
+			(bytes memory returnedMessage, , ) = canTransferByPartition(from, to, partition, amount, data);
+			if (keccak256(returnedMessage) == keccak256("0x51")) return (true, "");
+			message = returnedMessage;
+		}
+
+		if (keccak256(message) == keccak256("0x50")) return (false, "ERC1400NFT: Invalid amount");
+		if (keccak256(message) == keccak256("0x52")) return (false, "ERC1400NFT: Insufficient balance");
+		if (keccak256(message) == keccak256("0x53")) return (false, "ERC1400NFT: insufficient allowance");
+		if (keccak256(message) == keccak256("0x56")) return (false, "ERC1400NFT: Invalid sender");
+		if (keccak256(message) == keccak256("0x57")) return (false, "ERC1400NFT: Cannot receive");
+		if (keccak256(message) == keccak256("0x5f")) {
+			return validateData ? (false, "ERC1400NFT: Invalid transfer data") : (true, "");
+		}
+
+		return (false, "ERC1400NFT: Failed with unknown error");
 	}
 
 	// --------------------------------------------------------------- TRANSFERS --------------------------------------------------------------- //
