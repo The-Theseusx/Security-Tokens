@@ -83,8 +83,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	// --------------------------------------------------------------- EVENTS --------------------------------------------------------------- //
 
 	///@dev event emitted when tokens are transferred with data attached
-	event TransferWithData(address indexed from, address indexed to, uint256 amount, bytes data);
-
+	event TransferWithData(address indexed from, address indexed to, uint256 amount, bytes indexed data);
 	///@dev event emitted when issuance is disabled
 	event IssuanceDisabled();
 	event Transfer(
@@ -264,12 +263,12 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		return partition == _partitionsOf[user][_partitionIndexOfUser[user][partition]];
 	}
 
-	/// @return if the operator address is allowed to control all tokens of a tokenHolder irrespective of partition.
+	/// @return true if the operator address is allowed to control all tokens of a tokenHolder irrespective of partition.
 	function isOperator(address operator, address account) public view virtual override returns (bool) {
 		return _approvedOperator[account][operator];
 	}
 
-	/// @return if the operator address is allowed to control tokens of a partition on behalf of the tokenHolder.
+	/// @return true if the operator address is allowed to control tokens of a partition on behalf of the tokenHolder.
 	function isOperatorForPartition(
 		bytes32 partition,
 		address operator,
@@ -307,7 +306,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @param to token recipient.
 	 * @param partition token partition.
 	 * @param amount token amount.
-	 * @param data information attached to the transfer, by the token holder.
+	 * @param data information attached to the transfer.
 	 */
 	function canTransferByPartition(
 		address from,
@@ -347,7 +346,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	/**
-	 * @notice Check if a transfer of tokens of the default partition is possible.
+	 * @notice Check if a transfer of tokens associated with the default partition is possible.
 	 * @param to token recipient.
 	 * @param amount token amount.
 	 * @param data information attached to the transfer, by the token holder.
@@ -463,6 +462,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @notice transfers tokens associated to the default partition, see transferByPartition to transfer from the non-default partition.
 	 * @param to the address to transfer tokens to
 	 * @param amount the amount to transfer from
+	 * @return true if successful
 	 */
 	function transfer(address to, uint256 amount) public virtual returns (bool) {
 		_transfer(_msgSender(), _msgSender(), to, amount, "", "");
@@ -485,6 +485,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @param to the address to transfer to
 	 * @param amount the amount to transfer
 	 * @param data transfer data.
+	 * @return partition if successful
 	 */
 	function transferByPartition(
 		bytes32 partition,
@@ -497,14 +498,14 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	/**
-	 * @param partition the token partition to transfer
+	 * @param partition the partition the token to transfer is associated with
 	 * @param from the address to transfer from
 	 * @param to the address to transfer to
 	 * @param amount the amount to transfer
 	 * @param data transfer data.
 	 * @param operatorData additional data attached by the operator (if any)
 	 * @notice since _msgSender() is supposed to be an authorized operator,
-	 * @param data and @param operatorData would be 0x unless the operator wishes to send additional metadata.
+	   @param data and @param operatorData would be "" unless the operator wishes to send additional metadata.
 	 */
 	function operatorTransferByPartition(
 		bytes32 partition,
@@ -520,7 +521,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	/**
-	 * @notice for controllers to transfer tokens of the default partition.
+	 * @notice for controllers to transfer tokens associated with the default partition.
 	 * @param from the address to transfer from
 	 * @param to the address to transfer to
 	 * @param amount the amount to transfer
@@ -540,7 +541,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	/**
-	 * @notice for controllers to transfer tokens of a given partition but the default partition.
+	 * @notice for controllers to transfer tokens of any given partition but the default partition.
 	 * @param partition the token partition to transfer
 	 * @param from the address to transfer from
 	 * @param to the address to transfer to
@@ -565,7 +566,8 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @param from the address to transfer tokens from
 	 * @param to the address to transfer tokens to
 	 * @param amount the amount to transfer from
-	 * @notice transfers from the default partition, see transferByPartitionFrom to transfer from a non-default partition.
+	 * @notice transfers from the default partition, see transferFromByPartition to 'transferFrom' a non-default partition.
+	 * @return true if successful
 	 */
 	function transferFrom(address from, address to, uint256 amount) public virtual returns (bool) {
 		_spendAllowance(from, _msgSender(), amount);
@@ -590,15 +592,15 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	/**
-	 * @notice since an authorized body might be forcing a token transfer from a different address, 
-	   the @param data could be a signature authorizing the transfer.
-	 * @notice in the case of a forced transfer, the data would be a signature authorizing the transfer hence the data must be validated.
-	 * @notice if it is a normal transferFrom, the operator data would be empty ("").
+	 * @notice if an authorized body might be forcing a token transfer from @param from, 
+	   the @param data should be a signature authorizing the transfer.
+	  * @notice if it is a normal transferFrom, the operator data should be empty ("").
 	 * @param partition the token partition to transfer
 	 * @param from the address to transfer from
 	 * @param to the address to transfer to
 	 * @param amount the amount to transfer
 	 * @param data transfer data.
+	 * @return partition if successful
 	 */
 	function transferFromByPartition(
 		bytes32 partition,
@@ -669,7 +671,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		address spender,
 		uint256 amount
 	) public virtual isValidPartition(partition) returns (bool) {
-		require(partition != DEFAULT_PARTITION, "ERC1400: approveByPartition default partition");
+		require(partition != DEFAULT_PARTITION, "ERC1400: default partition");
 		_approveByPartition(partition, _msgSender(), spender, amount);
 		return true;
 	}
@@ -720,8 +722,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 
 	/**
 	 * @notice authorize an operator to use _msgSender()'s tokens irrespective of partitions.
-	 * @notice this grants permission to the operator to transfer ALL tokens of _msgSender().
-	 * @notice this includes burning tokens on behalf of the token holder.
+	   This includes burning tokens on behalf of the token holder.
 	 * @param operator address to authorize as operator for caller.
 	 */
 	function authorizeOperator(address operator) public virtual override {
@@ -731,9 +732,9 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	/**
-	 * @notice authorize an operator to use _msgSender()'s tokens of a given partition.
-	 * @notice this grants permission to the operator to transfer tokens of _msgSender() for a given partition.
-	 * @notice this includes burning tokens of @param partition on behalf of the token holder.
+	 * @notice authorize an operator to use _msgSender()'s tokens of a given partition only. 
+	   Not necessary if authorizeOperator has already been called.
+	   This includes burning tokens of @param partition on behalf of the token holder.
 	 * @param partition the token partition.
 	 * @param operator address to authorize as operator for caller.
 	 */
@@ -748,13 +749,15 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 
 	/**
 	 * @notice revoke an operator's rights to use _msgSender()'s tokens irrespective of partitions.
-	 * @notice this will revoke ALL operator rights of the _msgSender() however,
-	 * @notice if the operator has been authorized to spend from a partition, this will not revoke those rights.
-	 * @notice see 'revokeOperatorByPartition' to revoke partition specific rights.
+	 * @notice This will revoke ALL operator rights of @param operator on _msgSender()'s tokens however,
+	   see 'revokeOperatorByPartition' to revoke partition specific rights only.
 	 * @param operator address to revoke as operator for caller.
 	 */
 	function revokeOperator(address operator) public virtual override {
-		_approvedOperator[_msgSender()][operator] = false;
+		//_approvedOperator[_msgSender()][operator] = false;
+		address[] memory operators = new address[](1);
+		operators[0] = operator;
+		revokeOperators(operators);
 		emit RevokedOperator(operator, _msgSender());
 	}
 
@@ -777,7 +780,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @notice this will revoke ALL operator rights for ALL partitions of _msgSender().
 	 * @param operators addresses to revoke as operators for caller.
 	 */
-	function revokeOperators(address[] calldata operators) public virtual {
+	function revokeOperators(address[] memory operators) public virtual {
 		bytes32[] memory partitions = partitionsOf(_msgSender());
 		uint256 userPartitionCount = partitions.length;
 		uint256 operatorCount = operators.length;
@@ -790,7 +793,8 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 				}
 
 				if (isOperator(operators[j], _msgSender())) {
-					revokeOperator(operators[j]);
+					//revokeOperator(operators[j]);
+					_approvedOperator[_msgSender()][operators[j]] = false;
 				}
 
 				unchecked {
