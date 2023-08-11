@@ -26,6 +26,35 @@ interface IERC1400NFT is IERC1643 {
 		bytes operatorData
 	);
 
+	// Transfer Events
+	event TransferByPartition(
+		bytes32 indexed fromPartition,
+		address operator,
+		address indexed from,
+		address indexed to,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
+
+	// Controller Events
+	event ControllerTransfer(
+		address indexed controller,
+		address indexed from,
+		address indexed to,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
+
+	event ControllerRedemption(
+		address indexed controller,
+		address indexed tokenHolder,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
+
 	// Token Information
 	function isIssuable() external view returns (bool);
 
@@ -131,22 +160,4 @@ interface IERC1400NFT is IERC1643 {
 		bytes calldata data,
 		bytes calldata operatorData
 	) external;
-
-	// Controller Events
-	event ControllerTransfer(
-		address indexed controller,
-		address indexed from,
-		address indexed to,
-		uint256 tokenId,
-		bytes data,
-		bytes operatorData
-	);
-
-	event ControllerRedemption(
-		address indexed controller,
-		address indexed tokenHolder,
-		uint256 tokenId,
-		bytes data,
-		bytes operatorData
-	);
 }
