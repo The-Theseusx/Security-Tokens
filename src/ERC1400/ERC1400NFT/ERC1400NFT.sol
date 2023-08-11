@@ -333,7 +333,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	  -IR: Receiver is invalid
 	  -ID: Invalid transfer data
 	  -IA: Insufficient allowance
-	  -ITID: Insufficient token Id
+	  -ITID: Invalid token Id
 
 	 * @param from token holder.
 	 * @param to token recipient.
