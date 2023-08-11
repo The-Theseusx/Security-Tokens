@@ -1022,7 +1022,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		_spendNonce(owner());
 
 		_transfer(operator, from, to, tokenId, data, operatorData);
-		//emit TransferWithData(_msgSender(), to, tokenId, data);
+		emit TransferWithData(_msgSender(), to, tokenId, data);
 
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData);
 	}
@@ -1078,7 +1078,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		_owners[tokenId] = to;
 		delete _tokenApprovalsByPartition[tokenId][partition];
 
-		//emit TransferByPartition(partition, operator, from, to, tokenId, data, operatorData);
+		emit TransferByPartition(partition, operator, from, to, tokenId, data, operatorData);
 
 		_afterTokenTransfer(partition, operator, from, to, tokenId, data, operatorData);
 	}
