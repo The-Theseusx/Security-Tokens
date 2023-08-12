@@ -1121,6 +1121,33 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 	}
 
+	function _changePartition(
+		address operator,
+		address account,
+		bytes32 partitionFrom,
+		bytes32 partitionTo,
+		uint256 amount,
+		bytes memory data,
+		bytes memory operatorData
+	) internal virtual isValidPartition(partitionFrom) isValidPartition(partitionTo) {
+		if (operator != account) {
+			require(
+				isOperatorForPartition(partitionFrom, operator, account) ||
+					isOperator(operator, account) ||
+					isController(operator),
+				"ERC1400: not operator or controller for partition"
+			);
+		}
+		require(_balancesByPartition[account][partitionFrom] >= amount, "ERC1400: insufficient balance");
+
+		_balancesByPartition[account][partitionFrom] -= amount;
+		_totalSupplyByPartition[partitionFrom] -= amount;
+		_balancesByPartition[account][partitionTo] += amount;
+		_totalSupplyByPartition[partitionTo] += amount;
+
+		emit ChangedPartition(operator, partitionFrom, partitionTo, account, amount, data, operatorData);
+	}
+
 	/**
 	 * @notice internal approve function for default partition
 	 * @param owner the address that holds the tokens to be spent
