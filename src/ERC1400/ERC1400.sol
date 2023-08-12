@@ -1122,10 +1122,10 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	function _changePartition(
-		address operator,
-		address account,
 		bytes32 partitionFrom,
 		bytes32 partitionTo,
+		address operator,
+		address account,
 		uint256 amount,
 		bytes memory data,
 		bytes memory operatorData
