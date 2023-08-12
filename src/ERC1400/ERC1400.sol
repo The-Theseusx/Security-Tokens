@@ -115,6 +115,15 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		bytes data,
 		bytes operatorData
 	);
+	event ChangedPartition(
+		address operator,
+		bytes32 indexed partitionFrom,
+		bytes32 indexed partitionTo,
+		address indexed account,
+		uint256 amount,
+		bytes data,
+		bytes operatorData
+	);
 	event NonceSpent(address indexed user, uint256 nonceSpent);
 
 	// --------------------------------------------------------------- MODIFIERS --------------------------------------------------------------- //
@@ -582,19 +591,14 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @param amount the amount to transfer from
 	 * @param data transfer data to be validated.
 	 */
-	function transferFromWithData(
-		address from,
-		address to,
-		uint256 amount,
-		bytes memory data
-	) public virtual override {
+	function transferFromWithData(address from, address to, uint256 amount, bytes memory data) public virtual override {
 		_transferWithData(_msgSender(), from, to, amount, data, "");
 	}
 
 	/**
 	 * @notice if an authorized body might be forcing a token transfer from @param from, 
 	   the @param data should be a signature authorizing the transfer.
-	  * @notice if it is a normal transferFrom, the operator data should be empty ("").
+	 * @notice if it is a normal transferFrom, the data should be empty ("").
 	 * @param partition the token partition to transfer
 	 * @param from the address to transfer from
 	 * @param to the address to transfer to
@@ -870,6 +874,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 
 	/**
 	 * @dev renounce ownership and disables issuance of tokens
+	 * @dev overrides renounceOwnership in OZ's Ownable2Step.sol
 	 */
 	function renounceOwnership() public virtual override onlyOwner {
 		_disableIssuance();
@@ -881,21 +886,20 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	/**
 	 /**
 	 * @notice allows the owner to issue tokens to an account from the default partition.
-	 * @notice since owner is the only one who can issue tokens, no need to validate data as a signature?
 	 * @param account the address to issue tokens to.
 	 * @param amount the amount of tokens to issue.
-	 * @param data additional data attached to the issue.
+	 * @param data additional data attached to the issuance.
 	 */
 	function issue(address account, uint256 amount, bytes memory data) public virtual override onlyOwner {
 		_issue(_msgSender(), account, amount, data);
 	}
 
 	/**
-	 * @notice allows the owner to issue tokens to an account from a specific partition aside from the default partition.
-	 * @param partition the token partition.
+	 * @notice allows the owner to issue tokens to an account from a specific partition other than the default partition.
+	 * @param partition the partition to issue tokens from.
 	 * @param account the address to issue tokens to.
 	 * @param amount the amount of tokens to issue.
-	 * @param data additional data attached to the issue.
+	 * @param data additional data attached to the issuance.
 	 */
 	function issueByPartition(
 		bytes32 partition,
@@ -923,13 +927,13 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @param amount the amount of tokens to redeem.
 	 * @param data additional data attached to the transfer.
 	 */
-	function redeemFrom(address tokenHolder, uint256 amount, bytes memory data) public virtual override onlyOwner {
+	function redeemFrom(address tokenHolder, uint256 amount, bytes memory data) public virtual override {
 		_redeem(_msgSender(), tokenHolder, amount, data, "");
 	}
 
 	/**
-	 * @notice allows users to redeem token. Redemptions should be approved by the issuer.
-	 * @param partition the token partition to reddem from, this could be the defaul partition.
+	 * @notice allows users to redeem token.
+	 * @param partition the token partition to reddem from.
 	 * @param amount the amount of tokens to redeem.
 	 * @param data additional data attached to the transfer.
 	 */
@@ -958,7 +962,6 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		bytes memory operatorData
 	) public virtual override isValidPartition(partition) {
 		if (partition == DEFAULT_PARTITION) {
-			require(isOperator(_msgSender(), account), "ERC1400: Not an operator");
 			_redeem(_msgSender(), account, amount, data, operatorData);
 			return;
 		}
@@ -1320,7 +1323,8 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		bytes memory operatorData
 	) internal virtual {
 		_beforeTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
-		require(_balancesByPartition[account][partition] >= amount, "ERC1400: Not enough balance");
+		require(partition != DEFAULT_PARTITION, "ERC1400: Wrong partition (DEFAULT_PARTITION)");
+		require(_balancesByPartition[account][partition] >= amount, "ERC1400: Insufficient balance");
 		if (operator != account) {
 			require(
 				isOperatorForPartition(partition, operator, account) ||
@@ -1347,6 +1351,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @param amount the amount of tokens to be sent
 	 * @param partition the partition from which the tokens are sent
 	 * @param signature the signature provided by the authorizer (data field in parent function)
+	 * @return bool 'true' if the data provided is valid, 'false' if not
 	 */
 	function _validateData(
 		address authorizer,
