@@ -748,16 +748,14 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	/**
-	 * @notice revoke an operator's rights to use _msgSender()'s tokens irrespective of partitions.
-	 * @notice This will revoke ALL operator rights of @param operator on _msgSender()'s tokens however,
-	   see 'revokeOperatorByPartition' to revoke partition specific rights only.
+	 * @notice revoke an operator's rights to use _msgSender()'s tokens.
+	 * @notice This will revoke operator rights of @param operator on _msgSender()'s tokens however,
+	   if @param operator has been authorized to use _msgSender()'s tokens of a given partition, this won't revoke that right.
+	   See 'revokeOperatorByPartition' to revoke partition specific rights only or 'revokeOperators' to revoke all rights of an operator.
 	 * @param operator address to revoke as operator for caller.
 	 */
 	function revokeOperator(address operator) public virtual override {
-		//_approvedOperator[_msgSender()][operator] = false;
-		address[] memory operators = new address[](1);
-		operators[0] = operator;
-		revokeOperators(operators);
+		_approvedOperator[_msgSender()][operator] = false;
 		emit RevokedOperator(operator, _msgSender());
 	}
 
@@ -793,8 +791,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 				}
 
 				if (isOperator(operators[j], _msgSender())) {
-					//revokeOperator(operators[j]);
-					_approvedOperator[_msgSender()][operators[j]] = false;
+					revokeOperator(operators[j]);
 				}
 
 				unchecked {
