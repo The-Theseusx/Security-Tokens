@@ -122,7 +122,15 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		bytes data,
 		bytes operatorData
 	);
-
+	event ChangedPartition(
+		address operator,
+		bytes32 indexed partitionFrom,
+		bytes32 indexed partitionTo,
+		address indexed account,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
 	event NonceSpent(address indexed user, uint256 nonceSpent);
 
 	// --------------------------------------------------------------- MODIFIERS --------------------------------------------------------------- //
@@ -200,16 +208,14 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		return _version;
 	}
 
-	/**
-	 * @return the total token balance of a user irrespective of partition.
-	 */
+	/// @return the total token balance of a user irrespective of partition.
 	function balanceOf(address account) public view virtual override returns (uint256) {
 		require(account != address(0), "ERC1400NFT: zero address");
 
 		return _balances[account];
 	}
 
-	/// @return the balance of a user for a given partition, default partition inclusive.
+	/// @return the total number of tokens of a user for a given partition, default partition inclusive.
 	function balanceOfByPartition(
 		bytes32 partition,
 		address account
@@ -219,9 +225,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		return _balancesByPartition[account][partition];
 	}
 
-	/**
-	 * @return the total token balance of a user for the default partition.
-	 */
+	/// @return the total number of tokens of a user for the default partition.
 	function balanceOfNonPartitioned(address account) public view virtual returns (uint256) {
 		return _balancesByPartition[account][DEFAULT_PARTITION];
 	}
@@ -236,7 +240,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		return _partitionsOf[account];
 	}
 
-	/// @dev return the partition of a token.
+	/// @return the partition of @param tokenId.
 	function partitionOfToken(uint256 tokenId) public view virtual returns (bytes32) {
 		require(exists(tokenId), "ERC1400NFT: non-existing token");
 
@@ -253,14 +257,14 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		return controller == _controllers[_controllerIndex[controller]];
 	}
 
-	/// @return the nonce of a user.
+	/// @return the nonce of a user. Nonces are used for data(signature) validation.
 	function getUserNonce(address user) public view virtual returns (uint256) {
 		return _userNonce[user];
 	}
 
 	/**
-	 * @param partition the token partition.
-	 * @param user the address to check if it is the owner of the partition.
+	 * @param partition the partition to check for.
+	 * @param user the address to check whether it has @param partition in its list of partitions.
 	 * @return true if the user is the owner of the partition, false otherwise.
 	 */
 	function isUserPartition(
@@ -270,6 +274,10 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		return partition == _partitionsOf[user][_partitionIndexOfUser[user][partition]];
 	}
 
+	/**
+	 * @param tokenId the token Id.
+	 * @return the token uri of a given tokenId.
+	 */
 	function tokenURI(uint256 tokenId) public view virtual returns (string memory) {
 		require(exists(tokenId), "ERC1400NFT: tokenId does not exist");
 
@@ -277,15 +285,14 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, tokenId.toString())) : "";
 	}
 
+	/**
+	 * @param tokenId the token Id.
+	 * @return the owner of a tokenId. Reverts if the token does not exist.
+	 */
 	function ownerOf(uint256 tokenId) public view virtual returns (address) {
 		address owner = _ownerOf(tokenId);
 		require(owner != address(0), "ERC1400NFT: invalid token ID");
 		return owner;
-	}
-
-	/// @dev Returns the owner of the `tokenId`. Does NOT revert if token doesn't exist
-	function _ownerOf(uint256 tokenId) internal view virtual returns (address) {
-		return _owners[tokenId];
 	}
 
 	/**
@@ -297,19 +304,28 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		return _ownerOf(tokenId) != address(0);
 	}
 
-	/// @dev Check if an operator is allowed to manage tokens of a given owner irrespective of partitions.
+	/**
+	 * @param owner the current owner of the token.
+	 * @param operator the operator to check for.
+	 * @return true if an operator is allowed to manage tokens of a given owner irrespective of partitions.
+	 */
 	function isApprovedForAll(address owner, address operator) public view virtual returns (bool) {
 		return isOperator(operator, owner);
 	}
 
-	/// @return if the operator address is allowed to control all tokens of a tokenHolder irrespective of partition.
-
-	function isOperator(address operator, address account) public view virtual override returns (bool) {
+	/**
+	 * @param operator the operator to check for.
+	 * @param account the current account to check if the operator is allowed to manage tokens of.
+	 * @return true if an operator is allowed to manage tokens of a given owner irrespective of partitions.
+	 */ function isOperator(address operator, address account) public view virtual override returns (bool) {
 		return _operatorApprovals[account][operator];
 	}
 
 	/**
-	 * @return if the operator address is allowed to control tokens of a partition on behalf of the tokenHolder.
+	 * @param partition the partition to check for.
+	 * @param operator the operator to check for.
+	 * @param account the current account to check if the operator is allowed to manage tokens of.
+	 * @return true if the operator address is allowed to control tokens of a partition on behalf of the tokenHolder.
 	 */
 	function isOperatorForPartition(
 		bytes32 partition,
@@ -319,6 +335,10 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		return _operatorApprovalsByPartition[account][partition][operator];
 	}
 
+	/**
+	 * @param tokenId the token Id.
+	 * @return an address approved to transfer @param tokenId
+	 */
 	function getApproved(uint256 tokenId) public view virtual returns (address) {
 		require(exists(tokenId), "ERC1400NFT: nonexistent token");
 
@@ -329,10 +349,10 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	* @notice Error messages:
 	  -IP: Invalid partition
 	  -IS: Invalid sender
-	  -IPB: Insufficient partition balance
-	  -IR: Receiver is invalid
-	  -ID: Invalid transfer data
-	  -IA: Insufficient allowance
+	  -ITO: Invalid token owner
+	  -IR: Invalid receiver
+	  -ITD: Invalid transfer data
+	  -NAT: Not approved to transfer token
 	  -ITID: Invalid token Id
 
 	 * @param from token holder.
@@ -350,10 +370,10 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	) public view virtual override returns (bytes memory, bytes32, bytes32) {
 		uint256 index = _partitionIndex[partition];
 		if (_partitions[index] != partition) return ("0x50", "ERC1400NFT: IP", bytes32(0));
-		if (ownerOf(tokenId) != _msgSender()) return ("0x52", "ERC1400NFT: IPB", bytes32(0));
+		if (ownerOf(tokenId) != from) return ("0x52", "ERC1400NFT: ITO", bytes32(0));
 		if (from == address(0)) return (bytes("0x56"), "ERC1400NFT: IS", bytes32(0));
 		if (to == address(0)) return ("0x57", "ERC1400NFT: IR", bytes32(0));
-		if (to.code.length > 0) {
+		if (to.code.length != 0) {
 			(bool can, ) = _canReceive(partition, _msgSender(), from, to, tokenId, data, "");
 			if (!can) return (bytes("0x57"), "ERC1400NFT: IR", bytes32(0));
 		}
@@ -365,14 +385,14 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 				!isOperatorForPartition(partition, _msgSender(), from) ||
 				!isController(_msgSender())
 			) {
-				return (bytes("0x53"), "IA", bytes32(0));
+				return (bytes("0x53"), "NAT", bytes32(0));
 			}
 		}
 		if (data.length != 0) {
 			if (_validateData(owner(), from, to, tokenId, partition, data)) {
 				return ("0x51", "ERC1400NFT: CT", "");
 			}
-			return ("0x5f", "ERC1400NFT: ID", "");
+			return ("0x5f", "ERC1400NFT: ITD", "");
 		}
 
 		return ("0x51", "ERC1400NFT: CT", "");
@@ -440,7 +460,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	}
 
 	/**
-	 * @notice considering the various ERC1400 interface 'can Transfer' methods return different messages, this method tries to standardize that.
+	 * @notice considering the various ERC1400NFT interface 'can Transfer' methods return different messages, this method tries to standardize that.
 	 * @param partition the partition @param tokenId is associated with.
 	 * @param from the address to transfer from
 	 * @param to the address to transfer to
@@ -476,7 +496,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 			message = returnedMessage;
 		}
 
-		if (keccak256(message) == keccak256("0x50")) return (false, "ERC1400NFT: Token does not exist");
+		if (keccak256(message) == keccak256("0x50")) return (false, "ERC1400NFT: Token ID does not exist");
 		if (keccak256(message) == keccak256("0x52")) return (false, "ERC1400NFT: Not token owner");
 		if (keccak256(message) == keccak256("0x57")) return (false, "ERC1400NFT: Cannot receive");
 		if (keccak256(message) == keccak256("0x53")) return (false, "ERC1400NFT: Spender not approved");
@@ -1083,6 +1103,45 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		_afterTokenTransfer(partition, operator, from, to, tokenId, data, operatorData);
 	}
 
+	/**
+	 * @notice change the partition of a token given a token ID
+	 * @param partitionFrom the current partition of the tokens
+	 * @param partitionTo the partition to change tokens to
+	 * @param operator the address performing the change
+	 * @param account the address holding the tokens
+	 * @param tokenId the Id of the token to change
+	 * @param data additional data attached to the change
+	 * @param operatorData additional data attached to the change by the operator (if any)
+	 */
+	function _changePartition(
+		bytes32 partitionFrom,
+		bytes32 partitionTo,
+		address operator,
+		address account,
+		uint256 tokenId,
+		bytes memory data,
+		bytes memory operatorData
+	) internal virtual isValidPartition(partitionFrom) isValidPartition(partitionTo) {
+		if (operator != account) {
+			require(
+				isOperatorForPartition(partitionFrom, operator, account) ||
+					isOperator(operator, account) ||
+					isController(operator),
+				"ERC1400NFT: not operator or controller for partition"
+			);
+		}
+
+		require(partitionOfToken(tokenId) == partitionFrom, "ERC1400NFT: Invalid token partition");
+		require(ownerOf(tokenId) == account, "ERC1400NFT: not token owner");
+
+		_balancesByPartition[account][partitionFrom] -= 1;
+		_balancesByPartition[account][partitionTo] += 1;
+
+		_partitionOfToken[tokenId] = partitionTo;
+
+		emit ChangedPartition(operator, partitionFrom, partitionTo, account, tokenId, data, operatorData);
+	}
+
 	function _approve(address owner, address to, uint256 tokenId) internal virtual {
 		_approveByPartition(DEFAULT_PARTITION, owner, to, tokenId);
 	}
@@ -1309,6 +1368,11 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 
 	function _changeBaseURI(string memory baseUri_) internal virtual {
 		_baseUri = baseUri_;
+	}
+
+	/// @dev Returns the owner of the `tokenId`. Does NOT revert if token doesn't exist
+	function _ownerOf(uint256 tokenId) internal view virtual returns (address) {
+		return _owners[tokenId];
 	}
 
 	/**
