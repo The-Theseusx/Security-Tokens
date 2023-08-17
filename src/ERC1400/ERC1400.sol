@@ -1120,6 +1120,16 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 	}
 
+	/**
+	 * @notice change the partition of tokens belonging to a given address
+	 * @param partitionFrom the current partition of the tokens
+	 * @param partitionTo the partition to change tokens to
+	 * @param operator the address performing the change
+	 * @param account the address holding the tokens
+	 * @param amount the amount of tokens to change
+	 * @param data additional data attached to the change
+	 * @param operatorData additional data attached to the change by the operator (if any)
+	 */
 	function _changePartition(
 		bytes32 partitionFrom,
 		bytes32 partitionTo,
