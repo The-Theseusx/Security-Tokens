@@ -10,7 +10,6 @@ import { IERC1400 } from "./IERC1400.sol";
 import { IERC1400Receiver } from "./IERC1400Receiver.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 
-//TODO: @dev review all functions
 contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	// --------------------------------------------------------------- CONSTANTS --------------------------------------------------------------- //
 
@@ -18,7 +17,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	bytes32 public constant DEFAULT_PARTITION = bytes32(0);
 
 	///@dev EIP712 typehash for data validation
-	bytes32 public constant ERC1400_DATA_VALIDATION_HASH =
+	bytes32 public constant ERC1400_DATA_VALIDATION_TYPEHASH =
 		keccak256("ERC1400ValidateData(address from,address to,uint256 amount,bytes32 partition,uint256 nonce)");
 
 	// --------------------------------------------------------- PRIVATE STATE VARIABLES --------------------------------------------------------- //
@@ -1180,9 +1179,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		uint256 currentAllowance = allowance(owner, spender);
 		if (currentAllowance != type(uint256).max) {
 			require(currentAllowance >= amount, "ERC1400: insufficient allowance");
-			unchecked {
-				_approve(owner, spender, currentAllowance - amount);
-			}
+			_approve(owner, spender, currentAllowance - amount);
 		}
 	}
 
@@ -1202,9 +1199,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		uint256 currentAllowance = allowanceByPartition(partition, owner, spender);
 		if (currentAllowance != type(uint256).max) {
 			require(currentAllowance >= amount, "ERC1400: insufficient partition allowance");
-			unchecked {
-				_approveByPartition(partition, owner, spender, currentAllowance - amount);
-			}
+			_approveByPartition(partition, owner, spender, currentAllowance - amount);
 		}
 	}
 
@@ -1389,7 +1384,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		bytes memory signature
 	) internal view virtual returns (bool) {
 		bytes32 structData = keccak256(
-			abi.encodePacked(ERC1400_DATA_VALIDATION_HASH, from, to, amount, partition, _userNonce[authorizer])
+			abi.encodePacked(ERC1400_DATA_VALIDATION_TYPEHASH, from, to, amount, partition, _userNonce[authorizer])
 		);
 		bytes32 structDataHash = _hashTypedDataV4(structData);
 		address recoveredSigner = ECDSA.recover(structDataHash, signature);
