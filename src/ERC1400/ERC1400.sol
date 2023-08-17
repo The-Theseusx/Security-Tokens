@@ -261,7 +261,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 
 	/**
 	 * @param partition the token partition.
-	 * @param user the address to check if it is the owner of the partition.
+	 * @param user the address to check whether it has @param partition in its list of partitions.
 	 * @return true if the user is the owner of the partition, false otherwise.
 	 */
 	function isUserPartition(
@@ -328,7 +328,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		if (balanceOfByPartition(partition, from) < amount) return ("0x52", "ERC1400: IPB", bytes32(0));
 		if (from == address(0)) return (bytes("0x56"), "ERC1400: IS", bytes32(0));
 		if (to == address(0)) return ("0x57", "ERC1400: IR", bytes32(0));
-		if (to.code.length > 0) {
+		if (to.code.length != 0) {
 			(bool can, ) = _canReceive(partition, _msgSender(), from, to, amount, data, "");
 			if (!can) return (bytes("0x57"), "ERC1400: IR", bytes32(0));
 		}
