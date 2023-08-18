@@ -348,7 +348,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	/**
 	* @notice Error messages:
 	  -IP: Invalid partition
-	  -IS: Invalid sender
+	  -IO: Invalid operator
 	  -ITO: Invalid token owner
 	  -IR: Invalid receiver
 	  -ITD: Invalid transfer data
@@ -362,16 +362,17 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	 * @param data information attached to the transfer, by the token holder.
 	 */
 	function canTransferByPartition(
+		///@dev review ERC1066 error codes used.
 		address from,
 		address to,
 		bytes32 partition,
 		uint256 tokenId,
 		bytes memory data
 	) public view virtual override returns (bytes memory, bytes32, bytes32) {
-		uint256 index = _partitionIndex[partition];
-		if (_partitions[index] != partition) return ("0x50", "ERC1400NFT: IP", bytes32(0));
+		if (_partitions[_partitionIndex[partition]] != partition) return ("0x50", "ERC1400NFT: IP", bytes32(0));
+		if (partitionOfToken(tokenId) != partition) return ("0x50", "ERC1400NFT: IP", bytes32(0));
 		if (ownerOf(tokenId) != from) return ("0x52", "ERC1400NFT: ITO", bytes32(0));
-		if (from == address(0)) return (bytes("0x56"), "ERC1400NFT: IS", bytes32(0));
+		if (from == address(0)) return (bytes("0x56"), "ERC1400NFT: IO", bytes32(0));
 		if (to == address(0)) return ("0x57", "ERC1400NFT: IR", bytes32(0));
 		if (to.code.length != 0) {
 			(bool can, ) = _canReceive(partition, _msgSender(), from, to, tokenId, data, "");
@@ -399,7 +400,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	}
 
 	/**
-	 * @notice Check if a transfer of tokens of the default partition is possible.
+	 * @notice Check if a transfer of a token of the default partition is possible.
 	 * @param to token recipient.
 	 * @param tokenId the token Id.
 	 * @param data information attached to the transfer, by the token holder.
@@ -412,6 +413,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
 		if (!exists(tokenId)) return (false, bytes("0x50"), bytes32(0));
 		if (ownerOf(tokenId) != _msgSender()) return (false, bytes("0x52"), bytes32(0));
+		if (partitionOfToken(tokenId) != DEFAULT_PARTITION) return (false, bytes("0x50"), bytes32(0));
 		if (to.code.length > 0) {
 			(bool can, ) = _canReceive(DEFAULT_PARTITION, _msgSender(), _msgSender(), to, tokenId, data, "");
 			if (!can) return (false, bytes("0x57"), bytes32(0));
