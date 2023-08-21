@@ -348,7 +348,8 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	/**
 	* @notice Error messages:
 	  -IP: Invalid partition
-	  -IO: Invalid operator
+	  -ITP: Invalid token partition
+	  -IS: Invalid sender
 	  -ITO: Invalid token owner
 	  -IR: Invalid receiver
 	  -ITD: Invalid transfer data
@@ -369,16 +370,16 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		uint256 tokenId,
 		bytes memory data
 	) public view virtual override returns (bytes memory, bytes32, bytes32) {
-		if (_partitions[_partitionIndex[partition]] != partition) return ("0x50", "ERC1400NFT: IP", bytes32(0));
-		if (partitionOfToken(tokenId) != partition) return ("0x50", "ERC1400NFT: IP", bytes32(0));
-		if (ownerOf(tokenId) != from) return ("0x52", "ERC1400NFT: ITO", bytes32(0));
-		if (from == address(0)) return (bytes("0x56"), "ERC1400NFT: IO", bytes32(0));
-		if (to == address(0)) return ("0x57", "ERC1400NFT: IR", bytes32(0));
+		if (_partitions[_partitionIndex[partition]] != partition) return ("0x50", "ERC1400NFT: IP", partition);
+		if (partitionOfToken(tokenId) != partition) return ("0x50", "ERC1400NFT: ITP", partition);
+		if (ownerOf(tokenId) != from) return ("0x52", "ERC1400NFT: ITO", partition);
+		if (from == address(0)) return (bytes("0x56"), "ERC1400NFT: IS", partition);
+		if (to == address(0)) return ("0x57", "ERC1400NFT: IR", partition);
 		if (to.code.length != 0) {
 			(bool can, ) = _canReceive(partition, _msgSender(), from, to, tokenId, data, "");
-			if (!can) return (bytes("0x57"), "ERC1400NFT: IR", bytes32(0));
+			if (!can) return (bytes("0x57"), "ERC1400NFT: IR", partition);
 		}
-		if (!exists(tokenId)) return ("0x50", "ERC1400NFT: ITID", bytes32(0));
+		if (!exists(tokenId)) return ("0x50", "ERC1400NFT: ITID", partition);
 		if (getApproved(tokenId) != to) {
 			/** @dev possibly called by an operator or controller, check if the sender is an operator or controller */
 			if (
@@ -386,19 +387,41 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 				!isOperatorForPartition(partition, _msgSender(), from) ||
 				!isController(_msgSender())
 			) {
-				return (bytes("0x53"), "NAT", bytes32(0));
+				return (bytes("0x53"), "NAT", partition);
 			}
 		}
 		if (data.length != 0) {
 			if (_validateData(owner(), from, to, tokenId, partition, data)) {
-				return ("0x51", "ERC1400NFT: CT", "");
+				return ("0x51", "ERC1400NFT: CT", partition);
 			}
-			return ("0x5f", "ERC1400NFT: ITD", "");
+			return ("0x5f", "ERC1400NFT: ITD", partition);
 		}
 
-		return ("0x51", "ERC1400NFT: CT", "");
+		return ("0x51", "ERC1400NFT: CT", partition);
 	}
 
+	/**
+	
+code	description
+0x50	transfer failure
+0x51	transfer success
+0x52	insufficient balance
+0x53	insufficient allowance
+0x54	transfers halted (contract paused)
+0x55	funds locked (lockup period)
+0x56	invalid sender
+0x57	invalid receiver
+0x58	invalid operator (transfer agent)
+0x59	
+0x5a	
+0x5b	
+0x5a	
+0x5b	
+0x5c	
+0x5d	
+0x5e	
+0x5f	token meta or info
+	 */
 	/**
 	 * @notice Check if a transfer of a token of the default partition is possible.
 	 * @param to token recipient.
