@@ -351,9 +351,10 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	  -ITP: Invalid token partition
 	  -IS: Invalid sender
 	  -ITO: Invalid token owner
+	  -ITA: Invalid transfer agent (operator)
 	  -IR: Invalid receiver
 	  -ITD: Invalid transfer data
-	  -NAT: Not approved to transfer token
+	  -NAT: Not approved to transfer token (allowance)
 	  -ITID: Invalid token Id
 
 	 * @param from token holder.
@@ -373,23 +374,28 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		if (_partitions[_partitionIndex[partition]] != partition) return ("0x50", "ERC1400NFT: IP", partition);
 		if (partitionOfToken(tokenId) != partition) return ("0x50", "ERC1400NFT: ITP", partition);
 		if (ownerOf(tokenId) != from) return ("0x52", "ERC1400NFT: ITO", partition);
-		if (from == address(0)) return (bytes("0x56"), "ERC1400NFT: IS", partition);
+		if (from == address(0)) return ("0x56", "ERC1400NFT: IS", partition);
 		if (to == address(0)) return ("0x57", "ERC1400NFT: IR", partition);
 		if (to.code.length != 0) {
 			(bool can, ) = _canReceive(partition, _msgSender(), from, to, tokenId, data, "");
-			if (!can) return (bytes("0x57"), "ERC1400NFT: IR", partition);
+			if (!can) return ("0x57", "ERC1400NFT: IR", partition);
 		}
 		if (!exists(tokenId)) return ("0x50", "ERC1400NFT: ITID", partition);
-		if (getApproved(tokenId) != to) {
-			/** @dev possibly called by an operator or controller, check if the sender is an operator or controller */
+
+		if (ownerOf(tokenId) != _msgSender()) {
 			if (
 				!isOperator(_msgSender(), from) ||
 				!isOperatorForPartition(partition, _msgSender(), from) ||
 				!isController(_msgSender())
 			) {
-				return (bytes("0x53"), "NAT", partition);
+				if (getApproved(tokenId) != to) {
+					return ("0x53", "ERC1400NFT: NAT", partition);
+				}
+				///@dev see transferFromByPartition to understand why this should return a transfer failure.
+				return ("0x58", "ERC1400NFT: ITA", partition);
 			}
 		}
+
 		if (data.length != 0) {
 			if (_validateData(owner(), from, to, tokenId, partition, data)) {
 				return ("0x51", "ERC1400NFT: CT", partition);
@@ -526,6 +532,7 @@ code	description
 		if (keccak256(message) == keccak256("0x57")) return (false, "ERC1400NFT: Cannot receive");
 		if (keccak256(message) == keccak256("0x53")) return (false, "ERC1400NFT: Spender not approved");
 		if (keccak256(message) == keccak256("0x56")) return (false, "ERC1400NFT: Invalid sender");
+		if (keccak256(message) == keccak256("0x58")) return (false, "ERC1400NFT: Invalid transfer agent");
 		if (keccak256(message) == keccak256("0x5f")) {
 			return validateData ? (false, "ERC1400NFT: Invalid transfer data") : (true, "");
 		}
