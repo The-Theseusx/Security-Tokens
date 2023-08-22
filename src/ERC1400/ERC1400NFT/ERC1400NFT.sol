@@ -538,7 +538,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 			message = returnedMessage;
 		}
 
-		if (keccak256(message) == keccak256("0x50")) return (false, "ERC1400NFT: Token ID does not exist");
+		if (keccak256(message) == keccak256("0x50")) return (false, "ERC1400NFT: Token ID does not exist"); ///@dev verify if this is the right error message.
 		if (keccak256(message) == keccak256("0x52")) return (false, "ERC1400NFT: Not token owner");
 		if (keccak256(message) == keccak256("0x57")) return (false, "ERC1400NFT: Cannot receive");
 		if (keccak256(message) == keccak256("0x53")) return (false, "ERC1400NFT: Spender not approved");
