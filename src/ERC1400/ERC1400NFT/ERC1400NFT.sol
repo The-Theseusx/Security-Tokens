@@ -407,26 +407,25 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	}
 
 	/**
-	
-code	description
-0x50	transfer failure
-0x51	transfer success
-0x52	insufficient balance
-0x53	insufficient allowance
-0x54	transfers halted (contract paused)
-0x55	funds locked (lockup period)
-0x56	invalid sender
-0x57	invalid receiver
-0x58	invalid operator (transfer agent)
-0x59	
-0x5a	
-0x5b	
-0x5a	
-0x5b	
-0x5c	
-0x5d	
-0x5e	
-0x5f	token meta or info
+	 **code	description **
+	 * 0x50	transfer failure
+	 * 0x51	transfer success
+	 * 0x52	insufficient balance
+	 * 0x53	insufficient allowance
+	 * 0x54	transfers halted (contract paused)
+	 * 0x55	funds locked (lockup period)
+	 * 0x56	invalid sender
+	 * 0x57	invalid receiver
+	 * 0x58	invalid operator (transfer agent)
+	 * 0x59
+	 * 0x5a
+	 * 0x5b
+	 * 0x5a
+	 * 0x5b
+	 * 0x5c
+	 * 0x5d
+	 * 0x5e
+	 * 0x5f	token meta or info
 	 */
 	/**
 	 * @notice Check if a transfer of a token of the default partition is possible.
@@ -441,7 +440,16 @@ code	description
 	) public view virtual override returns (bool, bytes memory, bytes32) {
 		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
 		if (!exists(tokenId)) return (false, bytes("0x50"), bytes32(0));
-		if (ownerOf(tokenId) != _msgSender()) return (false, bytes("0x52"), bytes32(0));
+		///@dev if you are not the owner, you must be an operator or controller.
+		if (ownerOf(tokenId) != _msgSender()) {
+			if (
+				!isOperator(_msgSender(), ownerOf(tokenId)) ||
+				!isOperatorForPartition(DEFAULT_PARTITION, _msgSender(), ownerOf(tokenId)) ||
+				!isController(_msgSender())
+			) {
+				return (false, bytes("0x58"), bytes32(0));
+			}
+		} //return (false, bytes("0x58"), bytes32(0));
 		if (partitionOfToken(tokenId) != DEFAULT_PARTITION) return (false, bytes("0x50"), bytes32(0));
 		if (to.code.length > 0) {
 			(bool can, ) = _canReceive(DEFAULT_PARTITION, _msgSender(), _msgSender(), to, tokenId, data, "");
@@ -573,7 +581,7 @@ code	description
 		address to,
 		uint256 tokenId,
 		bytes memory data
-	) public virtual override {
+	) public virtual override isOwnerOrApproved(to, tokenId) {
 		_transferWithData(_msgSender(), from, to, tokenId, data, "");
 	}
 
