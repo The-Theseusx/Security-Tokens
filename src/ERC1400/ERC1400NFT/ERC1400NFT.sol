@@ -449,7 +449,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 			) {
 				return (false, bytes("0x58"), bytes32(0));
 			}
-		} //return (false, bytes("0x58"), bytes32(0));
+		}
 		if (partitionOfToken(tokenId) != DEFAULT_PARTITION) return (false, bytes("0x50"), bytes32(0));
 		if (to.code.length > 0) {
 			(bool can, ) = _canReceive(DEFAULT_PARTITION, _msgSender(), _msgSender(), to, tokenId, data, "");
@@ -479,17 +479,20 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 			if (!can) return (false, bytes("0x57"), bytes32(0));
 		}
 		if (!exists(tokenId)) return (false, bytes("0x50"), bytes32(0));
-		if (getApproved(tokenId) != to) {
-			/** @dev possibly called by an operator or controller, check if the sender is an operator or controller */
+		if (ownerOf(tokenId) != from) return (false, bytes("0x52"), bytes32(0));
+		if (ownerOf(tokenId) != _msgSender()) {
 			if (
 				!isOperator(_msgSender(), from) ||
 				!isOperatorForPartition(DEFAULT_PARTITION, _msgSender(), from) ||
 				!isController(_msgSender())
 			) {
-				return (false, bytes("0x53"), bytes32(0));
+				if (getApproved(tokenId) != to) {
+					return (false, "ERC1400NFT: NAT", DEFAULT_PARTITION);
+				}
+				///@dev see transferFrom to understand why this should return a transfer failure.
+				return (false, "ERC1400NFT: ITA", DEFAULT_PARTITION);
 			}
 		}
-		if (ownerOf(tokenId) != _msgSender()) return (false, bytes("0x52"), bytes32(0));
 		if (data.length != 0) {
 			if (!_validateData(owner(), from, to, tokenId, DEFAULT_PARTITION, data)) {
 				return (false, bytes("0x5f"), bytes32(0));
