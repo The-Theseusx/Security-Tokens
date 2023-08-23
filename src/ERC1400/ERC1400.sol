@@ -347,7 +347,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 			if (_validateData(owner(), from, to, amount, partition, data)) {
 				return ("0x51", "ERC1400: CT", "");
 			}
-			return ("0x50", "ERC1400: ID", "");
+			return ("0x5f", "ERC1400: ID", "");
 		}
 
 		return ("0x51", "ERC1400: CT", "");
@@ -452,7 +452,9 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 			message = returnedMessage;
 		}
 
-		if (keccak256(message) == keccak256("0x50")) return (false, "ERC1400NFT: Invalid amount");
+		if (keccak256(message) == keccak256("0x50")) {
+			return (false, "ERC1400NFT: Invalid amount, partition or transfer failure");
+		}
 		if (keccak256(message) == keccak256("0x52")) return (false, "ERC1400NFT: Insufficient balance");
 		if (keccak256(message) == keccak256("0x53")) return (false, "ERC1400NFT: insufficient allowance");
 		if (keccak256(message) == keccak256("0x56")) return (false, "ERC1400NFT: Invalid sender");
