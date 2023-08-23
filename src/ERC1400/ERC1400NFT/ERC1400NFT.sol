@@ -381,14 +381,14 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 			if (!can) return ("0x57", "ERC1400NFT: IR", partition);
 		}
 		if (!exists(tokenId)) return ("0x50", "ERC1400NFT: ITID", partition);
-
-		if (ownerOf(tokenId) != _msgSender()) {
+		address approvedSpender = getApproved(tokenId);
+		if (ownerOf(tokenId) != _msgSender() && _msgSender() != approvedSpender) {
 			if (
 				!isOperator(_msgSender(), from) ||
 				!isOperatorForPartition(partition, _msgSender(), from) ||
 				!isController(_msgSender())
 			) {
-				if (getApproved(tokenId) != to) {
+				if (approvedSpender != to) {
 					return ("0x53", "ERC1400NFT: NAT", partition);
 				}
 				///@dev see transferFromByPartition to understand why this should return a transfer failure.
@@ -472,21 +472,22 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		uint256 tokenId,
 		bytes memory data
 	) public view virtual override returns (bool, bytes memory, bytes32) {
-		if (from == address(0)) return (false, bytes("0x56"), bytes32(0));
-		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
+		if (from == address(0)) return (false, "0x56", bytes32(0));
+		if (to == address(0)) return (false, "0x57", bytes32(0));
 		if (to.code.length > 0) {
 			(bool can, ) = _canReceive(DEFAULT_PARTITION, _msgSender(), from, to, tokenId, data, "");
-			if (!can) return (false, bytes("0x57"), bytes32(0));
+			if (!can) return (false, "0x57", bytes32(0));
 		}
-		if (!exists(tokenId)) return (false, bytes("0x50"), bytes32(0));
-		if (ownerOf(tokenId) != from) return (false, bytes("0x52"), bytes32(0));
-		if (ownerOf(tokenId) != _msgSender()) {
+		if (!exists(tokenId)) return (false, "0x50", bytes32(0));
+		if (ownerOf(tokenId) != from) return (false, "0x52", bytes32(0));
+		address approvedSpender = getApproved(tokenId);
+		if (ownerOf(tokenId) != _msgSender() && _msgSender() != approvedSpender) {
 			if (
 				!isOperator(_msgSender(), from) ||
 				!isOperatorForPartition(DEFAULT_PARTITION, _msgSender(), from) ||
 				!isController(_msgSender())
 			) {
-				if (getApproved(tokenId) != to) {
+				if (approvedSpender != to) {
 					return (false, "ERC1400NFT: NAT", DEFAULT_PARTITION);
 				}
 				///@dev see transferFrom to understand why this should return a transfer failure.
@@ -495,10 +496,10 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		}
 		if (data.length != 0) {
 			if (!_validateData(owner(), from, to, tokenId, DEFAULT_PARTITION, data)) {
-				return (false, bytes("0x5f"), bytes32(0));
+				return (false, "0x5f", bytes32(0));
 			}
 		}
-		return (true, bytes("0x51"), bytes32(0));
+		return (true, "0x51", bytes32(0));
 	}
 
 	/**
@@ -538,11 +539,13 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 			message = returnedMessage;
 		}
 
-		if (keccak256(message) == keccak256("0x50")) return (false, "ERC1400NFT: Token ID does not exist"); ///@dev verify if this is the right error message.
+		if (keccak256(message) == keccak256("0x50")) {
+			return (false, "ERC1400NFT: Invalid tokenId, partition or transfer failure");
+		}
 		if (keccak256(message) == keccak256("0x52")) return (false, "ERC1400NFT: Not token owner");
-		if (keccak256(message) == keccak256("0x57")) return (false, "ERC1400NFT: Cannot receive");
 		if (keccak256(message) == keccak256("0x53")) return (false, "ERC1400NFT: Spender not approved");
 		if (keccak256(message) == keccak256("0x56")) return (false, "ERC1400NFT: Invalid sender");
+		if (keccak256(message) == keccak256("0x57")) return (false, "ERC1400NFT: Cannot receive");
 		if (keccak256(message) == keccak256("0x58")) return (false, "ERC1400NFT: Invalid transfer agent");
 		if (keccak256(message) == keccak256("0x5f")) {
 			return validateData ? (false, "ERC1400NFT: Invalid transfer data") : (true, "");
