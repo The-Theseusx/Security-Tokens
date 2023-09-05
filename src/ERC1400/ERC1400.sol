@@ -1,7 +1,7 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import { Ownable2Step } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
+import { AccessControl } from "openzeppelin-contracts/contracts/access/AccessControl.sol";
 import { Context } from "openzeppelin-contracts/contracts/utils/Context.sol";
 import { ERC1643 } from "../ERC1643/ERC1643.sol";
 import { ERC165 } from "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
@@ -10,7 +10,7 @@ import { IERC1400 } from "./IERC1400.sol";
 import { IERC1400Receiver } from "./IERC1400Receiver.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 
-contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
+contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	// --------------------------------------------------------------- CONSTANTS --------------------------------------------------------------- //
 
 	///@dev tokens not belonging to any partition should use this partition
@@ -19,6 +19,15 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	///@dev EIP712 typehash for data validation
 	bytes32 public constant ERC1400_DATA_VALIDATION_TYPEHASH =
 		keccak256("ERC1400ValidateData(address from,address to,uint256 amount,bytes32 partition,uint256 nonce)");
+
+	///@dev Access control role for the token issuer.
+	bytes32 public constant ERC1400_ISSUER_ROLE = keccak256("ERC1400_ISSUER_ROLE");
+
+	///@dev Access control role for the token redeemer.
+	bytes32 public constant ERC1400_REDEEMER_ROLE = keccak256("ERC1400_REDEEMER_ROLE");
+
+	///@dev Access control role for the token transfer agent. Transfer agents can authorize transfers with their signatures.
+	bytes32 public constant ERC1400_TRANSFER_AGENT_ROLE = keccak256("ERC1400_TRANSFER_AGENT_ROLE");
 
 	// --------------------------------------------------------- PRIVATE STATE VARIABLES --------------------------------------------------------- //
 
@@ -77,12 +86,18 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	mapping(address => mapping(address => bool)) private _approvedOperator;
 
 	///@dev mapping of used nonces
-	mapping(address => uint256) private _userNonce;
+	mapping(bytes32 => uint256) private _roleNonce;
 
 	// --------------------------------------------------------------- EVENTS --------------------------------------------------------------- //
 
 	///@dev event emitted when tokens are transferred with data attached
-	event TransferWithData(address indexed from, address indexed to, uint256 amount, bytes indexed data);
+	event TransferWithData(
+		address indexed authorizer,
+		address indexed from,
+		address indexed to,
+		uint256 amount,
+		bytes data
+	);
 	///@dev event emitted when issuance is disabled
 	event IssuanceDisabled();
 	event Transfer(
@@ -123,7 +138,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		bytes data,
 		bytes operatorData
 	);
-	event NonceSpent(address indexed user, uint256 nonceSpent);
+	event NonceSpent(bytes32 indexed role, uint256 nonceSpent);
 
 	// --------------------------------------------------------------- MODIFIERS --------------------------------------------------------------- //
 
@@ -155,7 +170,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 
 	// --------------------------------------------------------------- PUBLIC GETTERS --------------------------------------------------------------- //
 
-	function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+	function supportsInterface(bytes4 interfaceId) public view virtual override(AccessControl, ERC165) returns (bool) {
 		return interfaceId == type(IERC1400).interfaceId || super.supportsInterface(interfaceId);
 	}
 
@@ -296,8 +311,8 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	}
 
 	/// @return the nonce of a user.
-	function getUserNonce(address user) public view virtual returns (uint256) {
-		return _userNonce[user];
+	function getRoleNonce(bytes32 role) public view virtual returns (uint256) {
+		return _roleNonce[role];
 	}
 
 	/**
@@ -344,10 +359,8 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 			}
 		}
 		if (data.length != 0) {
-			if (_validateData(owner(), from, to, amount, partition, data)) {
-				return ("0x51", "ERC1400: CT", "");
-			}
-			return ("0x5f", "ERC1400: ID", "");
+			(bool can, ) = _validateData(ERC1400_TRANSFER_AGENT_ROLE, from, to, amount, partition, data);
+			if (!can) return ("0x5f", "ERC1400: ID", "");
 		}
 
 		return ("0x51", "ERC1400: CT", "");
@@ -407,16 +420,17 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		}
 		if (balanceOfNonPartitioned(_msgSender()) < amount) return (false, bytes("0x52"), bytes32(0));
 		if (data.length != 0) {
-			if (!_validateData(owner(), from, to, amount, DEFAULT_PARTITION, data)) {
-				return (false, bytes("0x5f"), bytes32(0));
-			}
+			(bool can, ) = _validateData(ERC1400_TRANSFER_AGENT_ROLE, from, to, amount, DEFAULT_PARTITION, data);
+			if (!can) return (false, bytes("0x5f"), bytes32(0));
 		}
 		return (true, bytes("0x51"), bytes32(0));
 	}
 
 	/**
-	/**
-	 * @notice considering the various ERC1400 interface 'can Transfer' methods return different messages, this method tries to standardize that.
+	 * @notice considering the different return data formats of 
+	 * IERC1594 canTransfer, IERC1594 canTransferFrom and IERC1410 canTransferByPartition, 
+	 * this method tries to combine all into one canTransfer function.
+	 
 	 * @param partition the partition to execute the transfer on.
 	 * @param from the address to transfer from
 	 * @param to the address to transfer to
@@ -615,8 +629,9 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		bytes memory data
 	) public virtual isValidPartition(partition) returns (bytes32) {
 		if (data.length != 0) {
-			require(_validateData(owner(), from, to, amount, partition, data), "ERC1400: Invalid data");
-			_spendNonce(owner());
+			(bool authorized, ) = _validateData(ERC1400_TRANSFER_AGENT_ROLE, from, to, amount, partition, data);
+			require(authorized, "ERC1400: Invalid data");
+			_spendNonce(ERC1400_TRANSFER_AGENT_ROLE);
 			_transferByPartition(partition, _msgSender(), from, to, amount, data, "");
 			return partition;
 		}
@@ -813,7 +828,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	/**
 	 * @notice add controllers for the token.
 	 */
-	function addControllers(address[] memory controllers) public virtual onlyOwner {
+	function addControllers(address[] memory controllers) public virtual onlyRole(DEFAULT_ADMIN_ROLE) {
 		uint256 controllersLength = controllers.length;
 		uint256 i;
 
@@ -839,7 +854,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	/**
 	 * @notice remove controllers for the token.
 	 */
-	function removeControllers(address[] memory controllers) external virtual onlyOwner {
+	function removeControllers(address[] memory controllers) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
 		uint256 controllersLength = controllers.length;
 		uint256 i;
 
@@ -869,7 +884,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	/**
 	 * @dev disables issuance of tokens, can only be called by the owner
 	 */
-	function disableIssuance() public virtual onlyOwner {
+	function disableIssuance() public virtual onlyRole(DEFAULT_ADMIN_ROLE) {
 		_disableIssuance();
 	}
 
@@ -877,7 +892,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @dev renounce ownership and disables issuance of tokens
 	 * @dev overrides renounceOwnership in OZ's Ownable2Step.sol
 	 */
-	function renounceOwnership() public virtual override onlyOwner {
+	function renounceOwnership() public virtual override onlyRole(DEFAULT_ADMIN_ROLE) {
 		_disableIssuance();
 		super.renounceOwnership();
 	}
@@ -891,7 +906,11 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @param amount the amount of tokens to issue.
 	 * @param data additional data attached to the issuance.
 	 */
-	function issue(address account, uint256 amount, bytes memory data) public virtual override onlyOwner {
+	function issue(
+		address account,
+		uint256 amount,
+		bytes memory data
+	) public virtual override onlyRole(ERC1400_ISSUER_ROLE) {
 		_issue(_msgSender(), account, amount, data);
 	}
 
@@ -907,7 +926,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		address account,
 		uint256 amount,
 		bytes memory data
-	) public virtual override onlyOwner {
+	) public virtual override onlyRole(ERC1400_ISSUER_ROLE) {
 		_issueByPartition(partition, _msgSender(), account, amount, data);
 	}
 
@@ -919,6 +938,17 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @param data additional data attached to the transfer.
 	 */
 	function redeem(uint256 amount, bytes memory data) public virtual override {
+		(bool authorized, ) = _validateData(
+			ERC1400_REDEEMER_ROLE,
+			_msgSender(),
+			address(0),
+			amount,
+			DEFAULT_PARTITION,
+			data
+		);
+		require(authorized, "ERC1400: Invalid data");
+		_spendNonce(ERC1400_REDEEMER_ROLE);
+
 		_redeem(_msgSender(), _msgSender(), amount, data, "");
 	}
 
@@ -928,7 +958,11 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @param amount the amount of tokens to redeem.
 	 * @param data additional data attached to the transfer.
 	 */
-	function redeemFrom(address tokenHolder, uint256 amount, bytes memory data) public virtual override {
+	function redeemFrom(
+		address tokenHolder,
+		uint256 amount,
+		bytes memory data
+	) public virtual override onlyRole(ERC1400_REDEEMER_ROLE) {
 		_redeem(_msgSender(), tokenHolder, amount, data, "");
 	}
 
@@ -943,6 +977,10 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		uint256 amount,
 		bytes memory data
 	) public virtual override isValidPartition(partition) {
+		(bool can, ) = _validateData(ERC1400_REDEEMER_ROLE, _msgSender(), address(0), amount, partition, data);
+		require(can, "ERC1400: Invalid data");
+		_spendNonce(ERC1400_REDEEMER_ROLE);
+
 		_redeemByPartition(partition, _msgSender(), _msgSender(), amount, data, "");
 	}
 
@@ -1113,12 +1151,19 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 		bytes memory operatorData
 	) internal virtual {
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
-
-		require(_validateData(owner(), from, to, amount, DEFAULT_PARTITION, data), "ERC1400: invalid data");
-		_spendNonce(owner());
+		(bool authorized, address authorizer) = _validateData(
+			ERC1400_TRANSFER_AGENT_ROLE,
+			from,
+			to,
+			amount,
+			DEFAULT_PARTITION,
+			data
+		);
+		require(authorized, "ERC1400: invalid data");
+		_spendNonce(ERC1400_TRANSFER_AGENT_ROLE);
 
 		_transfer(operator, from, to, amount, data, operatorData);
-		emit TransferWithData(_msgSender(), to, amount, data);
+		emit TransferWithData(authorizer, _msgSender(), to, amount, data);
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 	}
 
@@ -1379,7 +1424,7 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 
 	/**
 	 * @notice validate the data provided by the user when performing transactions that require validated data (signatures)
-	 * @param authorizer the address authorizing the transaction
+	 * @param authorizerRole the role the recovered signer is supposed to have
 	 * @param from the address sending tokens
 	 * @param to the address receiving tokens
 	 * @param amount the amount of tokens to be sent
@@ -1388,28 +1433,27 @@ contract ERC1400 is IERC1400, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
 	 * @return bool 'true' if the data provided is valid, 'false' if not
 	 */
 	function _validateData(
-		address authorizer,
+		bytes32 authorizerRole,
 		address from,
 		address to,
 		uint256 amount,
 		bytes32 partition,
 		bytes memory signature
-	) internal view virtual returns (bool) {
+	) internal view virtual returns (bool, address) {
 		bytes32 structData = keccak256(
-			abi.encodePacked(ERC1400_DATA_VALIDATION_TYPEHASH, from, to, amount, partition, _userNonce[authorizer])
+			abi.encodePacked(ERC1400_DATA_VALIDATION_TYPEHASH, from, to, amount, partition, _roleNonce[authorizerRole])
 		);
 		bytes32 structDataHash = _hashTypedDataV4(structData);
 		address recoveredSigner = ECDSA.recover(structDataHash, signature);
-
-		return recoveredSigner == authorizer;
+		return (hasRole(authorizerRole, recoveredSigner), recoveredSigner);
 	}
 
 	/**
 	 * @notice increase the nonce of a user usually after a transaction signature has been validated
 	 */
-	function _spendNonce(address user) private {
-		uint256 nonce = ++_userNonce[user];
-		emit NonceSpent(user, nonce - 1);
+	function _spendNonce(bytes32 role) private {
+		uint256 nonce = ++_roleNonce[role];
+		emit NonceSpent(role, nonce - 1);
 	}
 
 	/// @dev intenal function to disable issuance of tokens
