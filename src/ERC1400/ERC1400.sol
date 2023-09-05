@@ -339,21 +339,22 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		bytes memory data
 	) public view virtual override returns (bytes memory, bytes32, bytes32) {
 		uint256 index = _partitionIndex[partition];
+		address operator = _msgSender();
 		if (_partitions[index] != partition) return ("0x50", "ERC1400: IP", bytes32(0));
 		if (balanceOfByPartition(partition, from) < amount) return ("0x52", "ERC1400: IPB", bytes32(0));
 		if (from == address(0)) return (bytes("0x56"), "ERC1400: IS", bytes32(0));
 		if (to == address(0)) return ("0x57", "ERC1400: IR", bytes32(0));
 		if (to.code.length != 0) {
-			(bool can, ) = _canReceive(partition, _msgSender(), from, to, amount, data, "");
+			(bool can, ) = _canReceive(partition, operator, from, to, amount, data, "");
 			if (!can) return (bytes("0x57"), "ERC1400: IR", bytes32(0));
 		}
 		if (amount == 0) return ("0x50", "ERC1400: ITA", bytes32(0));
-		if (amount > allowance(from, _msgSender())) {
+		if (amount > allowance(from, operator)) {
 			/** @dev possibly called by an operator or controller, check if the sender is an operator or controller */
 			if (
-				!isOperator(_msgSender(), from) ||
-				!isOperatorForPartition(partition, _msgSender(), from) ||
-				!isController(_msgSender())
+				!isOperator(operator, from) ||
+				!isOperatorForPartition(partition, operator, from) ||
+				!isController(operator)
 			) {
 				return (bytes("0x53"), "IA", bytes32(0));
 			}
@@ -377,11 +378,12 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		uint256 amount,
 		bytes memory data
 	) public view virtual override returns (bool, bytes memory, bytes32) {
+		address operator = _msgSender();
 		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
 		if (amount == 0) return (false, bytes("0x50"), bytes32(0));
-		if (balanceOfNonPartitioned(_msgSender()) < amount) return (false, bytes("0x52"), bytes32(0));
+		if (balanceOfNonPartitioned(operator) < amount) return (false, bytes("0x52"), bytes32(0));
 		if (to.code.length > 0) {
-			(bool can, ) = _canReceive(DEFAULT_PARTITION, _msgSender(), _msgSender(), to, amount, data, "");
+			(bool can, ) = _canReceive(DEFAULT_PARTITION, operator, operator, to, amount, data, "");
 			if (!can) return (false, bytes("0x57"), bytes32(0));
 		}
 
@@ -401,24 +403,25 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		uint256 amount,
 		bytes memory data
 	) public view virtual override returns (bool, bytes memory, bytes32) {
+		address operator = _msgSender();
 		if (from == address(0)) return (false, bytes("0x56"), bytes32(0));
 		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
 		if (to.code.length > 0) {
-			(bool can, ) = _canReceive(DEFAULT_PARTITION, _msgSender(), from, to, amount, data, "");
+			(bool can, ) = _canReceive(DEFAULT_PARTITION, operator, from, to, amount, data, "");
 			if (!can) return (false, bytes("0x57"), bytes32(0));
 		}
 		if (amount == 0) return (false, bytes("0x50"), bytes32(0));
-		if (amount > allowance(from, _msgSender())) {
+		if (amount > allowance(from, operator)) {
 			/** @dev possibly called by an operator or controller, check if the sender is an operator or controller */
 			if (
-				!isOperator(_msgSender(), from) ||
-				!isOperatorForPartition(DEFAULT_PARTITION, _msgSender(), from) ||
-				!isController(_msgSender())
+				!isOperator(operator, from) ||
+				!isOperatorForPartition(DEFAULT_PARTITION, operator, from) ||
+				!isController(operator)
 			) {
 				return (false, bytes("0x53"), bytes32(0));
 			}
 		}
-		if (balanceOfNonPartitioned(_msgSender()) < amount) return (false, bytes("0x52"), bytes32(0));
+		if (balanceOfNonPartitioned(operator) < amount) return (false, bytes("0x52"), bytes32(0));
 		if (data.length != 0) {
 			(bool can, ) = _validateData(ERC1400_TRANSFER_AGENT_ROLE, from, to, amount, DEFAULT_PARTITION, data);
 			if (!can) return (false, bytes("0x5f"), bytes32(0));
@@ -489,7 +492,8 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	 * @return true if successful
 	 */
 	function transfer(address to, uint256 amount) public virtual returns (bool) {
-		_transfer(_msgSender(), _msgSender(), to, amount, "", "");
+		address operator = _msgSender();
+		_transfer(operator, operator, to, amount, "", "");
 		return true;
 	}
 
@@ -500,11 +504,12 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	 * @param data transfer data.
 	 */
 	function transferWithData(address to, uint256 amount, bytes memory data) public virtual override {
-		_transferWithData(_msgSender(), _msgSender(), to, amount, data, "");
+		address operator = _msgSender();
+		_transferWithData(operator, operator, to, amount, data, "");
 	}
 
 	/**
-	 * @notice since _msgSender() is the token holder, the data argument would be empty ("") unless the token holder wishes to send additional metadata.
+	 * @notice since msg.sender is the token holder, the data argument would be empty ("") unless the token holder wishes to send additional metadata.
 	 * @param partition the token partition to transfer
 	 * @param to the address to transfer to
 	 * @param amount the amount to transfer
@@ -517,7 +522,8 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		uint256 amount,
 		bytes memory data
 	) public virtual override isValidPartition(partition) returns (bytes32) {
-		_transferByPartition(partition, _msgSender(), _msgSender(), to, amount, data, "");
+		address operator = _msgSender();
+		_transferByPartition(partition, operator, operator, to, amount, data, "");
 		return partition;
 	}
 
@@ -528,7 +534,7 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	 * @param amount the amount to transfer
 	 * @param data transfer data.
 	 * @param operatorData additional data attached by the operator (if any)
-	 * @notice since _msgSender() is supposed to be an authorized operator,
+	 * @notice since msg.sender is supposed to be an authorized operator,
 	   @param data and @param operatorData would be "" unless the operator wishes to send additional metadata.
 	 */
 	function operatorTransferByPartition(
@@ -539,8 +545,10 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual override isValidPartition(partition) returns (bytes32) {
-		require(_approvedOperatorByPartition[from][partition][_msgSender()], "ERC1400: Not authorized operator");
-		_transferByPartition(partition, _msgSender(), from, to, amount, data, operatorData);
+		address operator = _msgSender();
+
+		require(_approvedOperatorByPartition[from][partition][operator], "ERC1400: Not authorized operator");
+		_transferByPartition(partition, operator, from, to, amount, data, operatorData);
 		return partition;
 	}
 
@@ -559,9 +567,10 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual override onlyController {
-		_transfer(_msgSender(), from, to, amount, data, operatorData);
+		address operator = _msgSender();
+		_transfer(operator, from, to, amount, data, operatorData);
 
-		emit ControllerTransfer(_msgSender(), from, to, amount, data, operatorData);
+		emit ControllerTransfer(operator, from, to, amount, data, operatorData);
 	}
 
 	/**
@@ -581,9 +590,10 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual onlyController isValidPartition(partition) {
-		_transferByPartition(partition, _msgSender(), from, to, amount, data, operatorData);
+		address operator = _msgSender();
+		_transferByPartition(partition, operator, from, to, amount, data, operatorData);
 
-		emit ControllerTransferByPartition(partition, _msgSender(), from, to, amount, data, operatorData);
+		emit ControllerTransferByPartition(partition, operator, from, to, amount, data, operatorData);
 	}
 
 	/**
@@ -594,8 +604,9 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	 * @return true if successful
 	 */
 	function transferFrom(address from, address to, uint256 amount) public virtual returns (bool) {
-		_spendAllowance(from, _msgSender(), amount);
-		_transfer(_msgSender(), from, to, amount, "", "");
+		address operator = _msgSender();
+		_spendAllowance(from, operator, amount);
+		_transfer(operator, from, to, amount, "", "");
 		return true;
 	}
 
@@ -628,15 +639,16 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		uint256 amount,
 		bytes memory data
 	) public virtual isValidPartition(partition) returns (bytes32) {
+		address operator = _msgSender();
 		if (data.length != 0) {
 			(bool authorized, ) = _validateData(ERC1400_TRANSFER_AGENT_ROLE, from, to, amount, partition, data);
 			require(authorized, "ERC1400: Invalid data");
 			_spendNonce(ERC1400_TRANSFER_AGENT_ROLE);
-			_transferByPartition(partition, _msgSender(), from, to, amount, data, "");
+			_transferByPartition(partition, operator, from, to, amount, data, "");
 			return partition;
 		}
-		_spendAllowanceByPartition(partition, from, _msgSender(), amount);
-		_transferByPartition(partition, _msgSender(), from, to, amount, data, "");
+		_spendAllowanceByPartition(partition, from, operator, amount);
+		_transferByPartition(partition, operator, from, to, amount, data, "");
 		return partition;
 	}
 
@@ -660,7 +672,8 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	 * @return true if successful
 	 */
 	function increaseAllowance(address spender, uint256 addedValue) public virtual returns (bool) {
-		_approve(_msgSender(), spender, _allowanceByPartition[_msgSender()][DEFAULT_PARTITION][spender] + addedValue);
+		address operator = _msgSender();
+		_approve(operator, spender, _allowanceByPartition[operator][DEFAULT_PARTITION][spender] + addedValue);
 		return true;
 	}
 
@@ -671,11 +684,9 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	 * @return true if successful
 	 */
 	function decreaseAllowance(address spender, uint256 subtractedValue) public virtual returns (bool) {
-		_approve(
-			_msgSender(),
-			spender,
-			_allowanceByPartition[_msgSender()][DEFAULT_PARTITION][spender] - subtractedValue
-		);
+		address operator = _msgSender();
+
+		_approve(operator, spender, _allowanceByPartition[operator][DEFAULT_PARTITION][spender] - subtractedValue);
 		return true;
 	}
 
@@ -709,11 +720,13 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		uint256 addedValue
 	) public virtual isValidPartition(partition) returns (bool) {
 		require(partition != DEFAULT_PARTITION, "ERC1400: default partition");
+		address operator = _msgSender();
+
 		_approveByPartition(
 			partition,
-			_msgSender(),
+			operator,
 			spender,
-			_allowanceByPartition[_msgSender()][partition][spender] + addedValue
+			_allowanceByPartition[operator][partition][spender] + addedValue
 		);
 		return true;
 	}
@@ -731,28 +744,31 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		uint256 subtractedValue
 	) public virtual isValidPartition(partition) returns (bool) {
 		require(partition != DEFAULT_PARTITION, "ERC1400: default partition");
+		address operator = _msgSender();
+
 		_approveByPartition(
 			partition,
-			_msgSender(),
+			operator,
 			spender,
-			_allowanceByPartition[_msgSender()][partition][spender] - subtractedValue
+			_allowanceByPartition[operator][partition][spender] - subtractedValue
 		);
 		return true;
 	}
 
 	/**
-	 * @notice authorize an operator to use _msgSender()'s tokens irrespective of partitions.
+	 * @notice authorize an operator to use msg.sender's tokens irrespective of partitions.
 	   This includes burning tokens on behalf of the token holder.
 	 * @param operator address to authorize as operator for caller.
 	 */
 	function authorizeOperator(address operator) public virtual override {
-		require(operator != _msgSender(), "ERC1400: self authorization not allowed");
-		_approvedOperator[_msgSender()][operator] = true;
-		emit AuthorizedOperator(operator, _msgSender());
+		address initiator = _msgSender();
+		require(operator != initiator, "ERC1400: self authorization not allowed");
+		_approvedOperator[initiator][operator] = true;
+		emit AuthorizedOperator(operator, initiator);
 	}
 
 	/**
-	 * @notice authorize an operator to use _msgSender()'s tokens of a given partition only. 
+	 * @notice authorize an operator to use msg.sender's tokens of a given partition only. 
 	   Not necessary if authorizeOperator has already been called.
 	   This includes burning tokens of @param partition on behalf of the token holder.
 	 * @param partition the token partition.
@@ -762,26 +778,28 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		bytes32 partition,
 		address operator
 	) public virtual override isValidPartition(partition) {
-		require(operator != _msgSender(), "ERC1400: self authorization not allowed");
-		_approvedOperatorByPartition[_msgSender()][partition][operator] = true;
-		emit AuthorizedOperatorByPartition(partition, operator, _msgSender());
+		address initiator = _msgSender();
+		require(operator != initiator, "ERC1400: self authorization not allowed");
+		_approvedOperatorByPartition[initiator][partition][operator] = true;
+		emit AuthorizedOperatorByPartition(partition, operator, initiator);
 	}
 
 	/**
-	 * @notice revoke an operator's rights to use _msgSender()'s tokens.
-	 * @notice This will revoke operator rights of @param operator on _msgSender()'s tokens however,
-	   if @param operator has been authorized to use _msgSender()'s tokens of a given partition, this won't revoke that right.
+	 * @notice revoke an operator's rights to use msg.sender's tokens.
+	 * @notice This will revoke operator rights of @param operator on msg.sender's tokens however,
+	   if @param operator has been authorized to use msg.sender's tokens of a given partition, this won't revoke that right.
 	   See 'revokeOperatorByPartition' to revoke partition specific rights only or 'revokeOperators' to revoke all rights of an operator.
 	 * @param operator address to revoke as operator for caller.
 	 */
 	function revokeOperator(address operator) public virtual override {
-		_approvedOperator[_msgSender()][operator] = false;
-		emit RevokedOperator(operator, _msgSender());
+		address initiator = _msgSender();
+		_approvedOperator[initiator][operator] = false;
+		emit RevokedOperator(operator, initiator);
 	}
 
 	/**
-	 * @notice revoke an operator's rights to use _msgSender()'s tokens of a given partition.
-	 * @notice this will revoke ALL operator rights of the _msgSender() for a given partition.
+	 * @notice revoke an operator's rights to use msg.sender's tokens of a given partition.
+	 * @notice this will revoke ALL operator rights of the msg.sender for a given partition.
 	 * @param partition the token partition.
 	 * @param operator address to revoke as operator for caller.
 	 */
@@ -789,28 +807,31 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		bytes32 partition,
 		address operator
 	) public virtual override isValidPartition(partition) {
-		_approvedOperatorByPartition[_msgSender()][partition][operator] = false;
-		emit RevokedOperatorByPartition(partition, operator, _msgSender());
+		address initiator = _msgSender();
+		_approvedOperatorByPartition[initiator][partition][operator] = false;
+		emit RevokedOperatorByPartition(partition, operator, initiator);
 	}
 
 	/**
 	 * @notice allows a user to revoke all the rights of their operators in a single transaction.
-	 * @notice this will revoke ALL operator rights for ALL partitions of _msgSender().
+	 * @notice this will revoke ALL operator rights for ALL partitions of msg.sender.
 	 * @param operators addresses to revoke as operators for caller.
 	 */
 	function revokeOperators(address[] memory operators) public virtual {
-		bytes32[] memory partitions = partitionsOf(_msgSender());
+		address operator = _msgSender();
+
+		bytes32[] memory partitions = partitionsOf(operator);
 		uint256 userPartitionCount = partitions.length;
 		uint256 operatorCount = operators.length;
 		uint256 i;
 		uint256 j;
 		for (; i < userPartitionCount; ) {
 			for (; j < operatorCount; ) {
-				if (isOperatorForPartition(partitions[i], operators[j], _msgSender())) {
+				if (isOperatorForPartition(partitions[i], operators[j], operator)) {
 					revokeOperatorByPartition(partitions[i], operators[j]);
 				}
 
-				if (isOperator(operators[j], _msgSender())) {
+				if (isOperator(operators[j], operator)) {
 					revokeOperator(operators[j]);
 				}
 
@@ -900,7 +921,6 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	// -------------------------------------------------------------------- ISSUANCE -------------------------------------------------------------------- //
 
 	/**
-	 /**
 	 * @notice allows the owner to issue tokens to an account from the default partition.
 	 * @param account the address to issue tokens to.
 	 * @param amount the amount of tokens to issue.
@@ -938,9 +958,11 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	 * @param data additional data attached to the transfer.
 	 */
 	function redeem(uint256 amount, bytes memory data) public virtual override {
+		address operator = _msgSender();
+
 		(bool authorized, ) = _validateData(
 			ERC1400_REDEEMER_ROLE,
-			_msgSender(),
+			operator,
 			address(0),
 			amount,
 			DEFAULT_PARTITION,
@@ -949,7 +971,7 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		require(authorized, "ERC1400: Invalid data");
 		_spendNonce(ERC1400_REDEEMER_ROLE);
 
-		_redeem(_msgSender(), _msgSender(), amount, data, "");
+		_redeem(operator, operator, amount, data, "");
 	}
 
 	/**
@@ -977,34 +999,35 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		uint256 amount,
 		bytes memory data
 	) public virtual override isValidPartition(partition) {
-		(bool can, ) = _validateData(ERC1400_REDEEMER_ROLE, _msgSender(), address(0), amount, partition, data);
+		address operator = _msgSender();
+
+		(bool can, ) = _validateData(ERC1400_REDEEMER_ROLE, operator, address(0), amount, partition, data);
 		require(can, "ERC1400: Invalid data");
 		_spendNonce(ERC1400_REDEEMER_ROLE);
 
-		_redeemByPartition(partition, _msgSender(), _msgSender(), amount, data, "");
+		_redeemByPartition(partition, operator, operator, amount, data, "");
 	}
 
 	/**
 	 * @param partition the token partition to redeem, this could be the default partition.
 	 * @param account the address to redeem from
 	 * @param amount the amount to redeem
-	 * @param data redeem data.
-	 * @param operatorData additional data attached by the operator (if any)
-	 * @notice since _msgSender() is supposed to be an authorized operator,
-	 * @param data and @param operatorData would be "" unless the operator wishes to send additional metadata.
+	 * @param data redemption validation data.
 	 */
 	function operatorRedeemByPartition(
 		bytes32 partition,
 		address account,
 		uint256 amount,
 		bytes memory data,
-		bytes memory operatorData
+		bytes memory
 	) public virtual override isValidPartition(partition) {
 		if (partition == DEFAULT_PARTITION) {
-			_redeem(_msgSender(), account, amount, data, operatorData);
+			//_redeem(_msgSender(), account, amount, data, operatorData);
+			redeemFrom(account, amount, data);
 			return;
 		}
-		_redeemByPartition(partition, _msgSender(), account, amount, data, operatorData);
+		redeemByPartition(partition, amount, data);
+		//_redeemByPartition(partition, _msgSender(), account, amount, data, operatorData);
 	}
 
 	/**
@@ -1020,9 +1043,11 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual override onlyController {
-		_redeem(_msgSender(), tokenHolder, amount, data, operatorData);
+		address operator = _msgSender();
 
-		emit ControllerRedemption(_msgSender(), tokenHolder, amount, data, operatorData);
+		_redeem(operator, tokenHolder, amount, data, operatorData);
+
+		emit ControllerRedemption(operator, tokenHolder, amount, data, operatorData);
 	}
 
 	/**
@@ -1040,9 +1065,11 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual onlyController isValidPartition(partition) {
-		_redeemByPartition(partition, _msgSender(), tokenHolder, amount, data, operatorData);
+		address operator = _msgSender();
 
-		emit ControllerRedemptionByPartition(partition, _msgSender(), tokenHolder, amount, data, operatorData);
+		_redeemByPartition(partition, operator, tokenHolder, amount, data, operatorData);
+
+		emit ControllerRedemptionByPartition(partition, operator, tokenHolder, amount, data, operatorData);
 	}
 
 	// --------------------------------------------------------------- INTERNAL FUNCTIONS --------------------------------------------------------------- //
@@ -1163,7 +1190,7 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		_spendNonce(ERC1400_TRANSFER_AGENT_ROLE);
 
 		_transfer(operator, from, to, amount, data, operatorData);
-		emit TransferWithData(authorizer, _msgSender(), to, amount, data);
+		emit TransferWithData(authorizer, operator, to, amount, data);
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 	}
 
