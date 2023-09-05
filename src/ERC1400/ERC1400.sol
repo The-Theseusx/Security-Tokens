@@ -547,7 +547,10 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	) public virtual override isValidPartition(partition) returns (bytes32) {
 		address operator = _msgSender();
 
-		require(_approvedOperatorByPartition[from][partition][operator], "ERC1400: Not authorized operator");
+		require(
+			_approvedOperator[from][operator] || _approvedOperatorByPartition[from][partition][operator],
+			"ERC1400: Not authorized operator"
+		);
 		_transferByPartition(partition, operator, from, to, amount, data, operatorData);
 		return partition;
 	}
