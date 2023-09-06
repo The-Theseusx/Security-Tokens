@@ -138,7 +138,7 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		bytes data,
 		bytes operatorData
 	);
-	event NonceSpent(bytes32 indexed role, uint256 nonceSpent);
+	event NonceSpent(bytes32 indexed role, address indexed spender, uint256 nonceSpent);
 
 	// --------------------------------------------------------------- MODIFIERS --------------------------------------------------------------- //
 
@@ -157,15 +157,32 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 
 	// --------------------------------------------------------------- CONSTRUCTOR --------------------------------------------------------------- //
 
-	constructor(string memory name_, string memory symbol_, string memory version_) EIP712(name_, version_) {
+	constructor(
+		string memory name_,
+		string memory symbol_,
+		string memory version_,
+		address tokenAdmin_,
+		address tokenIssuer_,
+		address tokenRedeemer_,
+		address tokenTransferAgent_
+	) EIP712(name_, version_) {
 		require(bytes(name_).length != 0, "ERC1400: name required");
 		require(bytes(symbol_).length != 0, "ERC1400: symbol required");
 		require(bytes(version_).length != 0, "ERC1400: version required");
+		require(tokenAdmin_ != address(0), "ERC1400: invalid token admin");
+		require(tokenIssuer_ != address(0), "ERC1400: invalid token issuer");
+		require(tokenRedeemer_ != address(0), "ERC1400: invalid token redeemer");
+		require(tokenTransferAgent_ != address(0), "ERC1400: invalid token transfer agent");
 
 		_name = name_;
 		_symbol = symbol_;
 		_version = version_;
 		_isIssuable = true;
+
+		_grantRole(DEFAULT_ADMIN_ROLE, tokenAdmin_);
+		_grantRole(ERC1400_ISSUER_ROLE, tokenIssuer_);
+		_grantRole(ERC1400_REDEEMER_ROLE, tokenRedeemer_);
+		_grantRole(ERC1400_TRANSFER_AGENT_ROLE, tokenTransferAgent_);
 	}
 
 	// --------------------------------------------------------------- PUBLIC GETTERS --------------------------------------------------------------- //
@@ -310,7 +327,7 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		return _controllers;
 	}
 
-	/// @return the nonce of a user.
+	/// @return the nonce of a role.
 	function getRoleNonce(bytes32 role) public view virtual returns (uint256) {
 		return _roleNonce[role];
 	}
@@ -470,17 +487,17 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		}
 
 		if (keccak256(message) == keccak256("0x50")) {
-			return (false, "ERC1400NFT: Invalid amount, partition or transfer failure");
+			return (false, "ERC1400: Invalid amount, partition or transfer failure");
 		}
-		if (keccak256(message) == keccak256("0x52")) return (false, "ERC1400NFT: Insufficient balance");
-		if (keccak256(message) == keccak256("0x53")) return (false, "ERC1400NFT: insufficient allowance");
-		if (keccak256(message) == keccak256("0x56")) return (false, "ERC1400NFT: Invalid sender");
-		if (keccak256(message) == keccak256("0x57")) return (false, "ERC1400NFT: Cannot receive");
+		if (keccak256(message) == keccak256("0x52")) return (false, "ERC1400: Insufficient balance");
+		if (keccak256(message) == keccak256("0x53")) return (false, "ERC1400: insufficient allowance");
+		if (keccak256(message) == keccak256("0x56")) return (false, "ERC1400: Invalid sender");
+		if (keccak256(message) == keccak256("0x57")) return (false, "ERC1400: Cannot receive");
 		if (keccak256(message) == keccak256("0x5f")) {
-			return validateData ? (false, "ERC1400NFT: Invalid transfer data") : (true, "");
+			return validateData ? (false, "ERC1400: Invalid transfer data") : (true, "");
 		}
 
-		return (false, "ERC1400NFT: Failed with unknown error");
+		return (false, "ERC1400: Failed with unknown error");
 	}
 
 	// --------------------------------------------------------------- TRANSFERS --------------------------------------------------------------- //
@@ -504,6 +521,7 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	 * @param data transfer data.
 	 */
 	function transferWithData(address to, uint256 amount, bytes memory data) public virtual override {
+		require(data.length != 0, "ERC1400: Invalid data");
 		address operator = _msgSender();
 		_transferWithData(operator, operator, to, amount, data, "");
 	}
@@ -621,6 +639,7 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	 * @param data transfer data to be validated.
 	 */
 	function transferFromWithData(address from, address to, uint256 amount, bytes memory data) public virtual override {
+		require(data.length != 0, "ERC1400: Invalid data");
 		_transferWithData(_msgSender(), from, to, amount, data, "");
 	}
 
@@ -644,9 +663,16 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	) public virtual isValidPartition(partition) returns (bytes32) {
 		address operator = _msgSender();
 		if (data.length != 0) {
-			(bool authorized, ) = _validateData(ERC1400_TRANSFER_AGENT_ROLE, from, to, amount, partition, data);
+			(bool authorized, address authorizer) = _validateData(
+				ERC1400_TRANSFER_AGENT_ROLE,
+				from,
+				to,
+				amount,
+				partition,
+				data
+			);
 			require(authorized, "ERC1400: Invalid data");
-			_spendNonce(ERC1400_TRANSFER_AGENT_ROLE);
+			_spendNonce(ERC1400_TRANSFER_AGENT_ROLE, authorizer);
 			_transferByPartition(partition, operator, from, to, amount, data, "");
 			return partition;
 		}
@@ -912,19 +938,10 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		_disableIssuance();
 	}
 
-	/**
-	 * @dev renounce ownership and disables issuance of tokens
-	 * @dev overrides renounceOwnership in OZ's Ownable2Step.sol
-	 */
-	function renounceOwnership() public virtual override onlyRole(DEFAULT_ADMIN_ROLE) {
-		_disableIssuance();
-		super.renounceOwnership();
-	}
-
 	// -------------------------------------------------------------------- ISSUANCE -------------------------------------------------------------------- //
 
 	/**
-	 * @notice allows the owner to issue tokens to an account from the default partition.
+	 * @notice allows an authority to issue tokens to an account from the default partition.
 	 * @param account the address to issue tokens to.
 	 * @param amount the amount of tokens to issue.
 	 * @param data additional data attached to the issuance.
@@ -938,7 +955,7 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	}
 
 	/**
-	 * @notice allows the owner to issue tokens to an account from a specific partition other than the default partition.
+	 * @notice allows an authority to issue tokens to an account from a specific partition other than the default partition.
 	 * @param partition the partition to issue tokens from.
 	 * @param account the address to issue tokens to.
 	 * @param amount the amount of tokens to issue.
@@ -956,14 +973,14 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	// -------------------------------------------------------------------- REDEMPTION -------------------------------------------------------------------- //
 
 	/**
-	 * @notice allows users to redeem token.
+	 * @notice allows users to redeem token. Securities redemption need to be authorized by the issuer or relevant authority.
 	 * @param amount the amount of tokens to redeem.
-	 * @param data additional data attached to the transfer.
+	 * @param data validation data attached to the redemption process.
 	 */
 	function redeem(uint256 amount, bytes memory data) public virtual override {
 		address operator = _msgSender();
 
-		(bool authorized, ) = _validateData(
+		(bool authorized, address authorizer) = _validateData(
 			ERC1400_REDEEMER_ROLE,
 			operator,
 			address(0),
@@ -972,13 +989,13 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 			data
 		);
 		require(authorized, "ERC1400: Invalid data");
-		_spendNonce(ERC1400_REDEEMER_ROLE);
+		_spendNonce(ERC1400_REDEEMER_ROLE, authorizer);
 
 		_redeem(operator, operator, amount, data, "");
 	}
 
 	/**
-	 * @notice allows authorized users to redeem token on behalf of someone else.
+	 * @notice allows an authority with the right to redeem tokens to redeem tokens on behalf of a token holder.
 	 * @param tokenHolder the address to redeem token from.
 	 * @param amount the amount of tokens to redeem.
 	 * @param data additional data attached to the transfer.
@@ -1004,9 +1021,16 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	) public virtual override isValidPartition(partition) {
 		address operator = _msgSender();
 
-		(bool can, ) = _validateData(ERC1400_REDEEMER_ROLE, operator, address(0), amount, partition, data);
+		(bool can, address authorizer) = _validateData(
+			ERC1400_REDEEMER_ROLE,
+			operator,
+			address(0),
+			amount,
+			partition,
+			data
+		);
 		require(can, "ERC1400: Invalid data");
-		_spendNonce(ERC1400_REDEEMER_ROLE);
+		_spendNonce(ERC1400_REDEEMER_ROLE, authorizer);
 
 		_redeemByPartition(partition, operator, operator, amount, data, "");
 	}
@@ -1190,7 +1214,7 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 			data
 		);
 		require(authorized, "ERC1400: invalid data");
-		_spendNonce(ERC1400_TRANSFER_AGENT_ROLE);
+		_spendNonce(ERC1400_TRANSFER_AGENT_ROLE, authorizer);
 
 		_transfer(operator, from, to, amount, data, operatorData);
 		emit TransferWithData(authorizer, operator, to, amount, data);
@@ -1479,11 +1503,17 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	}
 
 	/**
-	 * @notice increase the nonce of a user usually after a transaction signature has been validated
+	 * @notice increase the nonce of a role usually after a transaction signature has been validated.
+	 * This function MUST be called whenever a signature is validated for a given role to prevent replay attacks.
+	 * Methods such as canTransfer and it's variants, may validate a signature before the actual transaction occurs. 
+	 * In such a case, this function SHOULD NOT be called as the state-changing transaction has not been performed yet.
+	 
+	 * @param role the role for which the nonce is increased
+	 * @param spender the address that spent the nonce in a signature
 	 */
-	function _spendNonce(bytes32 role) private {
+	function _spendNonce(bytes32 role, address spender) private {
 		uint256 nonce = ++_roleNonce[role];
-		emit NonceSpent(role, nonce - 1);
+		emit NonceSpent(role, spender, nonce - 1);
 	}
 
 	/// @dev intenal function to disable issuance of tokens
@@ -1561,9 +1591,8 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 						revert(add(32, reason), mload(reason))
 					}
 				}
-			} else {
-				return true;
 			}
+			return true;
 		}
 		return true;
 	}
