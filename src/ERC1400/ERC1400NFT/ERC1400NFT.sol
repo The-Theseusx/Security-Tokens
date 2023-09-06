@@ -1,9 +1,9 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
-import { Ownable2Step } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
+
+import { AccessControl } from "openzeppelin-contracts/contracts/access/AccessControl.sol";
 import { Context } from "openzeppelin-contracts/contracts/utils/Context.sol";
 import { ERC165 } from "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
-
 import { ERC1643 } from "../../ERC1643/ERC1643.sol";
 import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
@@ -17,7 +17,7 @@ import { IERC1400NFTReceiver } from "./IERC1400NFTReceiver.sol";
  * @dev A token id issued to a partition cannot be issued to any other partition.
  */
 
-contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC165 {
+contract ERC1400NFT is IERC1400NFT, Context, ERC1643, EIP712, ERC165, AccessControl {
 	using Strings for uint256;
 
 	// --------------------------------------------------------------- CONSTANTS --------------------------------------------------------------- //
@@ -28,6 +28,14 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	bytes32 public constant ERC1400NFT_DATA_VALIDATION_HASH =
 		keccak256("ERC1400NFTValidateData(address from,address to,uint256 tokenId,bytes32 partition,uint256 nonce)");
 
+	///@dev Access control role for the token issuer.
+	bytes32 public constant ERC1400_NFT_ISSUER_ROLE = keccak256("ERC1400_NFT_ISSUER_ROLE");
+
+	///@dev Access control role for the token redeemer.
+	bytes32 public constant ERC1400_NFT_REDEEMER_ROLE = keccak256("ERC1400_NFT_REDEEMER_ROLE");
+
+	///@dev Access control role for the token transfer agent. Transfer agents can authorize transfers with their signatures.
+	bytes32 public constant ERC1400_NFT_TRANSFER_AGENT_ROLE = keccak256("ERC1400_NFT_TRANSFER_AGENT_ROLE");
 	// --------------------------------------------------------- PRIVATE STATE VARIABLES --------------------------------------------------------- //
 
 	///@dev token name
@@ -85,7 +93,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	mapping(address => mapping(bytes32 => mapping(address => bool))) private _operatorApprovalsByPartition;
 
 	///@dev mapping of used nonces
-	mapping(address => uint256) private _userNonce;
+	mapping(bytes32 => uint256) private _roleNonce;
 
 	// --------------------------------------------------------------- EVENTS --------------------------------------------------------------- //
 	///@dev event emitted when tokens are transferred with data attached
@@ -131,7 +139,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		bytes data,
 		bytes operatorData
 	);
-	event NonceSpent(address indexed user, uint256 nonceSpent);
+	event NonceSpent(bytes32 indexed role, address indexed spender, uint256 nonceSpent);
 
 	// --------------------------------------------------------------- MODIFIERS --------------------------------------------------------------- //
 
@@ -162,21 +170,35 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		string memory name_,
 		string memory symbol_,
 		string memory baseUri_,
-		string memory version_
+		string memory version_,
+		address tokenAdmin_,
+		address tokenIssuer_,
+		address tokenRedeemer_,
+		address tokenTransferAgent_
 	) EIP712(name_, version_) {
 		require(bytes(name_).length != 0, "ERC1400NFT: invalid name");
 		require(bytes(symbol_).length != 0, "ERC1400NFT: no symbol");
 		require(bytes(version_).length != 0, "ERC1400NFT: invalid version");
+		require(tokenAdmin_ != address(0), "ERC1400NFT: invalid token admin");
+		require(tokenIssuer_ != address(0), "ERC1400NFT: invalid token issuer");
+		require(tokenRedeemer_ != address(0), "ERC1400NFT: invalid token redeemer");
+		require(tokenTransferAgent_ != address(0), "ERC1400NFT: invalid token transfer agent");
+
 		_name = name_;
 		_symbol = symbol_;
 		_baseUri = baseUri_;
 		_version = version_;
 		_isIssuable = true;
+
+		_grantRole(DEFAULT_ADMIN_ROLE, tokenAdmin_);
+		_grantRole(ERC1400_NFT_ISSUER_ROLE, tokenIssuer_);
+		_grantRole(ERC1400_NFT_REDEEMER_ROLE, tokenRedeemer_);
+		_grantRole(ERC1400_NFT_TRANSFER_AGENT_ROLE, tokenTransferAgent_);
 	}
 
 	// --------------------------------------------------------------- PUBLIC GETTERS --------------------------------------------------------------- //
 
-	function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+	function supportsInterface(bytes4 interfaceId) public view virtual override(ERC165, AccessControl) returns (bool) {
 		return interfaceId == type(IERC1400NFT).interfaceId || super.supportsInterface(interfaceId);
 	}
 
@@ -257,9 +279,9 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		return controller == _controllers[_controllerIndex[controller]];
 	}
 
-	/// @return the nonce of a user. Nonces are used for data(signature) validation.
-	function getUserNonce(address user) public view virtual returns (uint256) {
-		return _userNonce[user];
+	/// @return the nonce of a role.
+	function getRoleNonce(bytes32 role) public view virtual returns (uint256) {
+		return _roleNonce[role];
 	}
 
 	/**
@@ -371,22 +393,24 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		uint256 tokenId,
 		bytes memory data
 	) public view virtual override returns (bytes memory, bytes32, bytes32) {
+		address operator = _msgSender();
+
 		if (_partitions[_partitionIndex[partition]] != partition) return ("0x50", "ERC1400NFT: IP", partition);
 		if (partitionOfToken(tokenId) != partition) return ("0x50", "ERC1400NFT: ITP", partition);
 		if (ownerOf(tokenId) != from) return ("0x52", "ERC1400NFT: ITO", partition);
 		if (from == address(0)) return ("0x56", "ERC1400NFT: IS", partition);
 		if (to == address(0)) return ("0x57", "ERC1400NFT: IR", partition);
 		if (to.code.length != 0) {
-			(bool can, ) = _canReceive(partition, _msgSender(), from, to, tokenId, data, "");
+			(bool can, ) = _canReceive(partition, operator, from, to, tokenId, data, "");
 			if (!can) return ("0x57", "ERC1400NFT: IR", partition);
 		}
 		if (!exists(tokenId)) return ("0x50", "ERC1400NFT: ITID", partition);
 		address approvedSpender = getApproved(tokenId);
-		if (ownerOf(tokenId) != _msgSender() && _msgSender() != approvedSpender) {
+		if (ownerOf(tokenId) != operator && operator != approvedSpender) {
 			if (
-				!isOperator(_msgSender(), from) ||
-				!isOperatorForPartition(partition, _msgSender(), from) ||
-				!isController(_msgSender())
+				!isOperator(operator, from) ||
+				!isOperatorForPartition(partition, operator, from) ||
+				!isController(operator)
 			) {
 				if (approvedSpender != to) {
 					return ("0x53", "ERC1400NFT: NAT", partition);
@@ -397,10 +421,8 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		}
 
 		if (data.length != 0) {
-			if (_validateData(owner(), from, to, tokenId, partition, data)) {
-				return ("0x51", "ERC1400NFT: CT", partition);
-			}
-			return ("0x5f", "ERC1400NFT: ITD", partition);
+			(bool can, ) = _validateData(ERC1400_NFT_TRANSFER_AGENT_ROLE, from, to, tokenId, partition, data);
+			if (!can) return ("0x5f", "ERC1400NFT: ITD", partition);
 		}
 
 		return ("0x51", "ERC1400NFT: CT", partition);
@@ -438,21 +460,23 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		uint256 tokenId,
 		bytes memory data
 	) public view virtual override returns (bool, bytes memory, bytes32) {
+		address operator = _msgSender();
+
 		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
 		if (!exists(tokenId)) return (false, bytes("0x50"), bytes32(0));
 		///@dev if you are not the owner, you must be an operator or controller.
-		if (ownerOf(tokenId) != _msgSender()) {
+		if (ownerOf(tokenId) != operator) {
 			if (
-				!isOperator(_msgSender(), ownerOf(tokenId)) ||
-				!isOperatorForPartition(DEFAULT_PARTITION, _msgSender(), ownerOf(tokenId)) ||
-				!isController(_msgSender())
+				!isOperator(operator, ownerOf(tokenId)) ||
+				!isOperatorForPartition(DEFAULT_PARTITION, operator, ownerOf(tokenId)) ||
+				!isController(operator)
 			) {
 				return (false, bytes("0x58"), bytes32(0));
 			}
 		}
 		if (partitionOfToken(tokenId) != DEFAULT_PARTITION) return (false, bytes("0x50"), bytes32(0));
 		if (to.code.length > 0) {
-			(bool can, ) = _canReceive(DEFAULT_PARTITION, _msgSender(), _msgSender(), to, tokenId, data, "");
+			(bool can, ) = _canReceive(DEFAULT_PARTITION, operator, operator, to, tokenId, data, "");
 			if (!can) return (false, bytes("0x57"), bytes32(0));
 		}
 
@@ -472,20 +496,22 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		uint256 tokenId,
 		bytes memory data
 	) public view virtual override returns (bool, bytes memory, bytes32) {
+		address operator = _msgSender();
+
 		if (from == address(0)) return (false, "0x56", bytes32(0));
 		if (to == address(0)) return (false, "0x57", bytes32(0));
 		if (to.code.length > 0) {
-			(bool can, ) = _canReceive(DEFAULT_PARTITION, _msgSender(), from, to, tokenId, data, "");
+			(bool can, ) = _canReceive(DEFAULT_PARTITION, operator, from, to, tokenId, data, "");
 			if (!can) return (false, "0x57", bytes32(0));
 		}
 		if (!exists(tokenId)) return (false, "0x50", bytes32(0));
 		if (ownerOf(tokenId) != from) return (false, "0x52", bytes32(0));
 		address approvedSpender = getApproved(tokenId);
-		if (ownerOf(tokenId) != _msgSender() && _msgSender() != approvedSpender) {
+		if (ownerOf(tokenId) != operator && operator != approvedSpender) {
 			if (
-				!isOperator(_msgSender(), from) ||
-				!isOperatorForPartition(DEFAULT_PARTITION, _msgSender(), from) ||
-				!isController(_msgSender())
+				!isOperator(operator, from) ||
+				!isOperatorForPartition(DEFAULT_PARTITION, operator, from) ||
+				!isController(operator)
 			) {
 				if (approvedSpender != to) {
 					return (false, "ERC1400NFT: NAT", DEFAULT_PARTITION);
@@ -495,15 +521,17 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 			}
 		}
 		if (data.length != 0) {
-			if (!_validateData(owner(), from, to, tokenId, DEFAULT_PARTITION, data)) {
-				return (false, "0x5f", bytes32(0));
-			}
+			(bool can, ) = _validateData(ERC1400_NFT_TRANSFER_AGENT_ROLE, from, to, tokenId, DEFAULT_PARTITION, data);
+			if (!can) return (false, "0x5f", bytes32(0));
 		}
 		return (true, "0x51", bytes32(0));
 	}
 
 	/**
-	 * @notice considering the various ERC1400NFT interface 'can Transfer' methods return different messages, this method tries to standardize that.
+	 * @notice considering the different return data formats of 
+	 * IERC1594 canTransfer, IERC1594 canTransferFrom and IERC1410 canTransferByPartition, 
+	 * this method tries to combine all into one canTransfer function.
+	 
 	 * @param partition the partition @param tokenId is associated with.
 	 * @param from the address to transfer from
 	 * @param to the address to transfer to
@@ -562,7 +590,9 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	 * @param data transfer data.
 	 */
 	function transferWithData(address to, uint256 tokenId, bytes memory data) public virtual override {
-		_transferWithData(_msgSender(), _msgSender(), to, tokenId, data, "");
+		address operator = _msgSender();
+		require(data.length != 0, "ERC1400NFT: Invalid transfer data");
+		_transferWithData(operator, operator, to, tokenId, data, "");
 	}
 
 	/**
@@ -592,7 +622,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	}
 
 	/**
-	 * @notice since _msgSender() is the token holder, the data argument would be empty ("") unless the token holder wishes to send additional metadata.
+	 * @notice since msg.sender is the token holder, the data argument would be empty ("") unless the token holder wishes to send additional metadata.
 	 * @param partition the partition tokenId is associated with.
 	 * @param to the address to transfer to
 	 * @param tokenId of the token to transfer
@@ -604,7 +634,9 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		uint256 tokenId,
 		bytes memory data
 	) public virtual override isValidPartition(partition) returns (bytes32) {
-		_transferByPartition(partition, _msgSender(), _msgSender(), to, tokenId, data, "");
+		address operator = _msgSender();
+
+		_transferByPartition(partition, operator, operator, to, tokenId, data, "");
 		return partition;
 	}
 
@@ -626,17 +658,27 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		uint256 tokenId,
 		bytes memory data
 	) public virtual isValidPartition(partition) returns (bytes32) {
+		address operator = _msgSender();
+
 		if (data.length != 0) {
-			require(_validateData(owner(), from, to, tokenId, partition, data), "ERC1400NFT: Invalid data");
-			_spendNonce(owner());
-			_transferByPartition(partition, _msgSender(), from, to, tokenId, data, "");
+			(bool authorized, address authorizer) = _validateData(
+				ERC1400_NFT_TRANSFER_AGENT_ROLE,
+				from,
+				to,
+				tokenId,
+				partition,
+				data
+			);
+			require(authorized, "ERC1400NFT: Invalid data");
+			_spendNonce(ERC1400_NFT_TRANSFER_AGENT_ROLE, authorizer);
+			_transferByPartition(partition, operator, from, to, tokenId, data, "");
 			return partition;
 		}
 		require(
-			ownerOf(tokenId) == _msgSender() || getApproved(tokenId) == to,
+			ownerOf(tokenId) == operator || getApproved(tokenId) == to,
 			"ERC1400NFT: caller is not owner or approved"
 		);
-		_transferByPartition(partition, _msgSender(), from, to, tokenId, data, "");
+		_transferByPartition(partition, operator, from, to, tokenId, data, "");
 		return partition;
 	}
 
@@ -647,7 +689,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	 * @param tokenId the tokenId to transfer
 	 * @param data transfer data.
 	 * @param operatorData additional data attached by the operator (if any)
-	 * @notice since _msgSender() is supposed to be an authorized operator,
+	 * @notice since msg.sender is supposed to be an authorized operator,
 	 * @param data and @param operatorData would be 0x unless the operator wishes to send additional metadata.
 	 */
 	function operatorTransferByPartition(
@@ -658,8 +700,10 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual override isValidPartition(partition) returns (bytes32) {
-		require(_operatorApprovalsByPartition[from][partition][_msgSender()], "ERC1400NFT: Not authorized operator");
-		_transferByPartition(partition, _msgSender(), from, to, tokenId, data, operatorData);
+		address operator = _msgSender();
+
+		require(_operatorApprovalsByPartition[from][partition][operator], "ERC1400NFT: Not authorized operator");
+		_transferByPartition(partition, operator, from, to, tokenId, data, operatorData);
 		return partition;
 	}
 
@@ -678,9 +722,11 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual override onlyController {
-		_transfer(_msgSender(), from, to, tokenId, data, operatorData);
+		address operator = _msgSender();
 
-		emit ControllerTransfer(_msgSender(), from, to, tokenId, data, operatorData);
+		_transfer(operator, from, to, tokenId, data, operatorData);
+
+		emit ControllerTransfer(operator, from, to, tokenId, data, operatorData);
 	}
 
 	/**
@@ -700,9 +746,11 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual onlyController isValidPartition(partition) {
-		_transferByPartition(partition, _msgSender(), from, to, tokenId, data, operatorData);
+		address operator = _msgSender();
 
-		emit ControllerTransferByPartition(partition, _msgSender(), from, to, tokenId, data, operatorData);
+		_transferByPartition(partition, operator, from, to, tokenId, data, operatorData);
+
+		emit ControllerTransferByPartition(partition, operator, from, to, tokenId, data, operatorData);
 	}
 
 	// -------------------------------------------- APPROVALS, ALLOWANCES & OPERATORS -------------------------------------------- //
@@ -711,7 +759,6 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		address owner = _ownerOf(tokenId);
 		require(_msgSender() == owner, "ERC1400NFT: caller is not token owner ");
 		require(to != owner, "ERC1400NFT: approval to current owner");
-		///@dev restrict all operator transfers to operatorTransfer so the appropriate events are emitted.
 		require(partitionOfToken(tokenId) == DEFAULT_PARTITION, "ERC1400NFT: token is not in the default partition");
 		_approve(owner, to, tokenId);
 	}
@@ -744,20 +791,21 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	}
 
 	/**
-	 * @notice authorize an operator to use _msgSender()'s tokens irrespective of partitions.
-	 * @notice this grants permission to the operator to transfer ALL tokens of _msgSender().
+	 * @notice authorize an operator to use msg.sender's tokens irrespective of partitions.
+	 * @notice this grants permission to the operator to transfer ALL tokens of msg.sender.
 	 * @notice this includes burning tokens on behalf of the token holder.
 	 * @param operator address to authorize as operator for caller.
 	 */
 	function authorizeOperator(address operator) public virtual override {
-		require(operator != _msgSender(), "ERC1400NFT: self authorization not allowed");
-		_operatorApprovals[_msgSender()][operator] = true;
-		emit AuthorizedOperator(operator, _msgSender());
+		address initiator = _msgSender();
+		require(operator != initiator, "ERC1400NFT: self authorization not allowed");
+		_operatorApprovals[initiator][operator] = true;
+		emit AuthorizedOperator(operator, initiator);
 	}
 
 	/**
-	 * @notice authorize an operator to use _msgSender()'s tokens of a given partition.
-	 * @notice this grants permission to the operator to transfer tokens of _msgSender() for a given partition.
+	 * @notice authorize an operator to use msg.sender's tokens of a given partition.
+	 * @notice this grants permission to the operator to transfer tokens of msg.sender for a given partition.
 	 * @notice this includes burning tokens of @param partition on behalf of the token holder.
 	 * @param partition the token partition.
 	 * @param operator address to authorize as operator for caller.
@@ -766,26 +814,28 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		bytes32 partition,
 		address operator
 	) public virtual override isValidPartition(partition) {
-		require(operator != _msgSender(), "ERC1400NFT: self authorization not allowed");
-		_operatorApprovalsByPartition[_msgSender()][partition][operator] = true;
-		emit AuthorizedOperatorByPartition(partition, operator, _msgSender());
+		address initiator = _msgSender();
+		require(operator != initiator, "ERC1400NFT: self authorization not allowed");
+		_operatorApprovalsByPartition[initiator][partition][operator] = true;
+		emit AuthorizedOperatorByPartition(partition, operator, initiator);
 	}
 
 	/**
-	 * @notice revoke an operator's rights to use _msgSender()'s tokens irrespective of partitions.
-	 * @notice this will revoke ALL operator rights of the _msgSender() however,
+	 * @notice revoke an operator's rights to use msg.sender's tokens irrespective of partitions.
+	 * @notice this will revoke ALL operator rights of the msg.sender however,
 	 * @notice if the operator has been authorized to spend from a partition, this will not revoke those rights.
 	 * @notice see 'revokeOperatorByPartition' to revoke partition specific rights.
 	 * @param operator address to revoke as operator for caller.
 	 */
 	function revokeOperator(address operator) public virtual override {
-		_operatorApprovals[_msgSender()][operator] = false;
-		emit RevokedOperator(operator, _msgSender());
+		address initiator = _msgSender();
+		_operatorApprovals[initiator][operator] = false;
+		emit RevokedOperator(operator, initiator);
 	}
 
 	/**
-	 * @notice revoke an operator's rights to use _msgSender()'s tokens of a given partition.
-	 * @notice this will revoke ALL operator rights of the _msgSender() for a given partition.
+	 * @notice revoke an operator's rights to use msg.sender's tokens of a given partition.
+	 * @notice this will revoke ALL operator rights of the msg.sender for a given partition.
 	 * @param partition the token partition.
 	 * @param operator address to revoke as operator for caller.
 	 */
@@ -793,14 +843,15 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		bytes32 partition,
 		address operator
 	) public virtual override isValidPartition(partition) {
-		_operatorApprovalsByPartition[_msgSender()][partition][operator] = false;
-		emit RevokedOperatorByPartition(partition, operator, _msgSender());
+		address initiator = _msgSender();
+		_operatorApprovalsByPartition[initiator][partition][operator] = false;
+		emit RevokedOperatorByPartition(partition, operator, initiator);
 	}
 
 	/**
 	 * @notice add controllers for the token.
 	 */
-	function addControllers(address[] memory controllers) external virtual onlyOwner {
+	function addControllers(address[] memory controllers) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
 		uint256 controllersLength = controllers.length;
 		uint256 i;
 
@@ -826,7 +877,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	/**
 	 * @notice remove controllers for the token.
 	 */
-	function removeControllers(address[] memory controllers) external virtual onlyOwner {
+	function removeControllers(address[] memory controllers) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
 		uint256 controllersLength = controllers.length;
 		uint256 i;
 
@@ -855,22 +906,24 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 
 	/**
 	 * @notice allows a user to revoke all the rights of their operators in a single transaction.
-	 * @notice this will revoke ALL operator rights for ALL partitions of _msgSender().
+	 * @notice this will revoke ALL operator rights for ALL partitions of msg.sender.
 	 * @param operators addresses to revoke as operators for caller.
 	 */
 	function revokeOperators(address[] memory operators) public virtual {
-		bytes32[] memory partitions = partitionsOf(_msgSender());
+		address operator = _msgSender();
+
+		bytes32[] memory partitions = partitionsOf(operator);
 		uint256 userPartitionCount = partitions.length;
 		uint256 operatorCount = operators.length;
 		uint256 i;
 		uint256 j;
 		for (; i < userPartitionCount; ) {
 			for (; j < operatorCount; ) {
-				if (isOperatorForPartition(partitions[i], operators[j], _msgSender())) {
+				if (isOperatorForPartition(partitions[i], operators[j], operator)) {
 					revokeOperatorByPartition(partitions[i], operators[j]);
 				}
 
-				if (isOperator(operators[j], _msgSender())) {
+				if (isOperator(operators[j], operator)) {
 					revokeOperator(operators[j]);
 				}
 
@@ -888,16 +941,8 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	/**
 	 * @dev disables issuance of tokens, can only be called by the owner
 	 */
-	function disableIssuance() public virtual onlyOwner {
+	function disableIssuance() public virtual onlyRole(DEFAULT_ADMIN_ROLE) {
 		_disableIssuance();
-	}
-
-	/**
-	 * @dev renounce ownership and disables issuance of tokens
-	 */
-	function renounceOwnership() public virtual override onlyOwner {
-		_disableIssuance();
-		super.renounceOwnership();
 	}
 
 	// -------------------------------------------------------------------- ISSUANCE -------------------------------------------------------------------- //
@@ -910,7 +955,11 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	 * @param tokenId the tokenId to issue.
 	 * @param data additional data attached to the issue.
 	 */
-	function issue(address account, uint256 tokenId, bytes memory data) public virtual override onlyOwner {
+	function issue(
+		address account,
+		uint256 tokenId,
+		bytes memory data
+	) public virtual override onlyRole(ERC1400_NFT_ISSUER_ROLE) {
 		_issue(_msgSender(), account, tokenId, data);
 	}
 
@@ -926,7 +975,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		address account,
 		uint256 tokenId,
 		bytes memory data
-	) public virtual override onlyOwner {
+	) public virtual override onlyRole(ERC1400_NFT_ISSUER_ROLE) {
 		_issueByPartition(partition, _msgSender(), account, tokenId, data);
 	}
 
@@ -938,7 +987,18 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	 * @param data additional data attached to the transfer.
 	 */
 	function redeem(uint256 tokenId, bytes memory data) public virtual override {
-		_redeem(_msgSender(), _msgSender(), tokenId, data, "");
+		address operator = _msgSender();
+		(bool authorized, address authorizer) = _validateData(
+			ERC1400_NFT_REDEEMER_ROLE,
+			operator,
+			address(0),
+			tokenId,
+			DEFAULT_PARTITION,
+			data
+		);
+		require(authorized, "ERC1400NFT: Invalid data");
+		_spendNonce(ERC1400_NFT_REDEEMER_ROLE, authorizer);
+		_redeem(operator, operator, tokenId, data, "");
 	}
 
 	/**
@@ -947,7 +1007,11 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	 * @param tokenId the tokenId to redeem.
 	 * @param data additional data attached to the transfer.
 	 */
-	function redeemFrom(address tokenHolder, uint256 tokenId, bytes memory data) public virtual override onlyOwner {
+	function redeemFrom(
+		address tokenHolder,
+		uint256 tokenId,
+		bytes memory data
+	) public virtual override onlyRole(ERC1400_NFT_REDEEMER_ROLE) {
 		_redeem(_msgSender(), tokenHolder, tokenId, data, "");
 	}
 
@@ -962,7 +1026,18 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		uint256 tokenId,
 		bytes memory data
 	) public virtual override isValidPartition(partition) {
-		_redeemByPartition(partition, _msgSender(), _msgSender(), tokenId, data, "");
+		address operator = _msgSender();
+		(bool authorized, address authorizer) = _validateData(
+			ERC1400_NFT_REDEEMER_ROLE,
+			operator,
+			address(0),
+			tokenId,
+			partition,
+			data
+		);
+		require(authorized, "ERC1400NFT: Invalid data");
+		_spendNonce(ERC1400_NFT_REDEEMER_ROLE, authorizer);
+		_redeemByPartition(partition, operator, operator, tokenId, data, "");
 	}
 
 	/**
@@ -971,8 +1046,6 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	 * @param tokenId the tokenId to redeem
 	 * @param data redeem data.
 	 * @param operatorData additional data attached by the operator (if any)
-	 * @notice since _msgSender() is supposed to be an authorized operator,
-	 * @param data and @param operatorData would be "" unless the operator wishes to send additional metadata.
 	 */
 	function operatorRedeemByPartition(
 		bytes32 partition,
@@ -981,12 +1054,27 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual override isValidPartition(partition) {
+		address operator = _msgSender();
+		require(
+			isOperator(operator, account) || isOperatorForPartition(partition, operator, account),
+			"ERC1400NFT: Not an operator"
+		);
+
 		if (partition == DEFAULT_PARTITION) {
-			require(isOperator(_msgSender(), account), "ERC1400NFT: Not an operator");
-			_redeem(_msgSender(), account, tokenId, data, operatorData);
+			(bool authorized, address authorizer) = _validateData(
+				ERC1400_NFT_REDEEMER_ROLE,
+				account,
+				address(0),
+				tokenId,
+				partition,
+				data
+			);
+			require(authorized, "ERC1400NFT: Invalid data");
+			_spendNonce(ERC1400_NFT_REDEEMER_ROLE, authorizer);
+			_redeem(operator, account, tokenId, data, operatorData);
 			return;
 		}
-		_redeemByPartition(partition, _msgSender(), account, tokenId, data, operatorData);
+		_redeemByPartition(partition, operator, account, tokenId, data, operatorData);
 	}
 
 	/**
@@ -1002,9 +1090,10 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual override onlyController {
-		_redeem(_msgSender(), tokenHolder, tokenId, data, operatorData);
+		address operator = _msgSender();
+		_redeem(operator, tokenHolder, tokenId, data, operatorData);
 
-		emit ControllerRedemption(_msgSender(), tokenHolder, tokenId, data, operatorData);
+		emit ControllerRedemption(operator, tokenHolder, tokenId, data, operatorData);
 	}
 
 	/**
@@ -1022,9 +1111,10 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual onlyController isValidPartition(partition) {
-		_redeemByPartition(partition, _msgSender(), tokenHolder, tokenId, data, operatorData);
+		address operator = _msgSender();
+		_redeemByPartition(partition, operator, tokenHolder, tokenId, data, operatorData);
 
-		emit ControllerRedemptionByPartition(partition, _msgSender(), tokenHolder, tokenId, data, operatorData);
+		emit ControllerRedemptionByPartition(partition, operator, tokenHolder, tokenId, data, operatorData);
 	}
 
 	// ------------------------------------------------------- INTERNAL & PRIVATE FUNCTIONS ------------------------------------------------------- //
@@ -1084,8 +1174,16 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	) internal virtual {
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData);
 
-		require(_validateData(owner(), from, to, tokenId, DEFAULT_PARTITION, data), "ERC1400NFT: invalid data");
-		_spendNonce(owner());
+		(bool authorized, address authorizer) = _validateData(
+			ERC1400_NFT_TRANSFER_AGENT_ROLE,
+			from,
+			to,
+			tokenId,
+			DEFAULT_PARTITION,
+			data
+		);
+		require(authorized, "ERC1400NFT: Invalid data");
+		_spendNonce(ERC1400_NFT_TRANSFER_AGENT_ROLE, authorizer);
 
 		_transfer(operator, from, to, tokenId, data, operatorData);
 		emit TransferWithData(_msgSender(), to, tokenId, data);
@@ -1375,7 +1473,7 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 
 	/**
 	 * @notice validate the data provided by the user when performing transactions that require validated data (signatures)
-	 * @param authorizer the address authorizing the transaction
+	 * @param authorizerRole the role the recovered signer MUST supposed to have
 	 * @param from the address sending tokens
 	 * @param to the address receiving tokens
 	 * @param tokenId the tokenId of tokens to be sent
@@ -1383,25 +1481,34 @@ contract ERC1400NFT is IERC1400NFT, Context, Ownable2Step, ERC1643, EIP712, ERC1
 	 * @param signature the signature provided by the authorizer (data field in parent function)
 	 */
 	function _validateData(
-		address authorizer,
+		bytes32 authorizerRole,
 		address from,
 		address to,
 		uint256 tokenId,
 		bytes32 partition,
 		bytes memory signature
-	) internal view virtual returns (bool) {
+	) internal view virtual returns (bool, address) {
 		bytes32 structData = keccak256(
-			abi.encodePacked(ERC1400NFT_DATA_VALIDATION_HASH, from, to, tokenId, partition, _userNonce[authorizer])
+			abi.encodePacked(ERC1400NFT_DATA_VALIDATION_HASH, from, to, tokenId, partition, _roleNonce[authorizerRole])
 		);
 		bytes32 structDataHash = _hashTypedDataV4(structData);
 		address recoveredSigner = ECDSA.recover(structDataHash, signature);
 
-		return recoveredSigner == authorizer;
+		return (hasRole(authorizerRole, recoveredSigner), recoveredSigner);
 	}
 
-	function _spendNonce(address user) private {
-		uint256 nonce = ++_userNonce[user];
-		emit NonceSpent(user, nonce - 1);
+	/**
+	 * @notice increase the nonce of a role usually after a transaction signature has been validated.
+	 * This function MUST be called whenever a signature is validated for a given role to prevent replay attacks.
+	 * Methods such as canTransfer and it's variants, may validate a signature before the actual transaction occurs. 
+	 * In such a case, this function SHOULD NOT be called as the state-changing transaction has not been performed yet.
+	 
+	 * @param role the role for which the nonce is increased
+	 * @param spender the address that spent the nonce in a signature
+	 */
+	function _spendNonce(bytes32 role, address spender) private {
+		uint256 nonce = ++_roleNonce[role];
+		emit NonceSpent(role, spender, nonce - 1);
 	}
 
 	/**
