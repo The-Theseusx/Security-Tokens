@@ -566,7 +566,7 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 		address operator = _msgSender();
 
 		require(
-			_approvedOperator[from][operator] || _approvedOperatorByPartition[from][partition][operator],
+			isOperator(operator, from) || isOperatorForPartition(partition, operator, from),
 			"ERC1400: Not authorized operator"
 		);
 		_transferByPartition(partition, operator, from, to, amount, data, operatorData);
@@ -1040,21 +1040,35 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 	 * @param account the address to redeem from
 	 * @param amount the amount to redeem
 	 * @param data redemption validation data.
+	 * @param operatorData additional data attached by the operator (if any)
 	 */
 	function operatorRedeemByPartition(
 		bytes32 partition,
 		address account,
 		uint256 amount,
 		bytes memory data,
-		bytes memory
+		bytes memory operatorData
 	) public virtual override isValidPartition(partition) {
+		address operator = _msgSender();
+		require(
+			isOperator(operator, account) || isOperatorForPartition(partition, operator, account),
+			"ERC1400: Not authorized operator"
+		);
 		if (partition == DEFAULT_PARTITION) {
-			//_redeem(_msgSender(), account, amount, data, operatorData);
-			redeemFrom(account, amount, data);
+			(bool authorized, address authorizer) = _validateData(
+				ERC1400_REDEEMER_ROLE,
+				account,
+				address(0),
+				amount,
+				partition,
+				data
+			);
+			require(authorized, "ERC1400: Invalid data");
+			_spendNonce(ERC1400_REDEEMER_ROLE, authorizer);
+			_redeem(_msgSender(), account, amount, data, operatorData);
 			return;
 		}
 		redeemByPartition(partition, amount, data);
-		//_redeemByPartition(partition, _msgSender(), account, amount, data, operatorData);
 	}
 
 	/**
