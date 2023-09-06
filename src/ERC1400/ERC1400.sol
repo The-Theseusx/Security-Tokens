@@ -187,7 +187,7 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 
 	// --------------------------------------------------------------- PUBLIC GETTERS --------------------------------------------------------------- //
 
-	function supportsInterface(bytes4 interfaceId) public view virtual override(AccessControl, ERC165) returns (bool) {
+	function supportsInterface(bytes4 interfaceId) public view virtual override(ERC165, AccessControl) returns (bool) {
 		return interfaceId == type(IERC1400).interfaceId || super.supportsInterface(interfaceId);
 	}
 
