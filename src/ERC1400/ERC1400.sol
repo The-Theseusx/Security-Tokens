@@ -1478,7 +1478,7 @@ contract ERC1400 is IERC1400, Context, ERC1643, EIP712, ERC165, AccessControl {
 
 	/**
 	 * @notice validate the data provided by the user when performing transactions that require validated data (signatures)
-	 * @param authorizerRole the role the recovered signer is supposed to have
+	 * @param authorizerRole the role the recovered signer MUST supposed to have
 	 * @param from the address sending tokens
 	 * @param to the address receiving tokens
 	 * @param amount the amount of tokens to be sent
