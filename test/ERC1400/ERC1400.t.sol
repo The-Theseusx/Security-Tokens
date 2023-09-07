@@ -6,7 +6,7 @@ import { ERC1400 } from "../../src/ERC1400/ERC1400.sol";
 
 contract ERC1400Test is Test {
 	string public constant TOKEN_NAME = "ERC1400MockToken";
-	string public constant TOKEN_SYMBOL = "ERC1400MT";
+	string public constant TOKEN_SYMBOL = "ERC1400MTK";
 	string public constant TOKEN_VERSION = "1";
 
 	address public constant ZERO_ADDRESS = address(0);
