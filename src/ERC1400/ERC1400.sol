@@ -1339,6 +1339,8 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	function _issue(address operator, address account, uint256 amount, bytes memory data) internal virtual {
 		require(account != address(0), "ERC1400: Invalid recipient (zero address)");
 		require(_isIssuable, "ERC1400: Token is not issuable");
+		require(amount != 0, "ERC1400: zero amount");
+
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, address(0), account, amount, data, "");
 		require(
 			_checkOnERC1400Received(DEFAULT_PARTITION, operator, address(0), account, amount, data, ""),
@@ -1372,6 +1374,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		require(account != address(0), "ERC1400: Invalid recipient (zero address)");
 		require(_isIssuable, "ERC1400: Token is not issuable");
 		require(partition != DEFAULT_PARTITION, "ERC1400: Invalid partition (default)");
+		require(amount != 0, "ERC1400: zero amount");
 
 		_beforeTokenTransfer(partition, operator, address(0), account, amount, data, "");
 		require(
@@ -1441,7 +1444,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 				"ERC1400: transfer operator is not authorized"
 			);
 		}
-
+		require(amount != 0, "ERC1400: zero amount");
 		require(_balancesByPartition[account][DEFAULT_PARTITION] >= amount, "ERC1400: Not enough funds");
 
 		_balances[account] -= amount;
@@ -1473,6 +1476,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		_beforeTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
 		require(partition != DEFAULT_PARTITION, "ERC1400: Wrong partition (DEFAULT_PARTITION)");
 		require(_balancesByPartition[account][partition] >= amount, "ERC1400: Insufficient balance");
+		require(amount != 0, "ERC1400: zero amount");
 		if (operator != account) {
 			require(
 				isOperatorForPartition(partition, operator, account) ||
