@@ -1,7 +1,7 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import { IERC1643 } from "../../ERC1643/IERC1643.sol";
+import { IERC1643 } from "../ERC1643/IERC1643.sol";
 
 interface IERC1400NFT is IERC1643 {
 	event AuthorizedOperator(address indexed operator, address indexed tokenHolder);

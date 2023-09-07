@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import { AccessControl } from "openzeppelin-contracts/contracts/access/AccessControl.sol";
 import { Context } from "openzeppelin-contracts/contracts/utils/Context.sol";
 import { ERC165 } from "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
-import { ERC1643 } from "../../ERC1643/ERC1643.sol";
+import { ERC1643 } from "../ERC1643/ERC1643.sol";
 import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import { Strings } from "openzeppelin-contracts/contracts/utils/Strings.sol";
