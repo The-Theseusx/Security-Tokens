@@ -11,7 +11,7 @@ import { Context } from "openzeppelin-contracts/contracts/utils/Context.sol";
 
  * @notice Inspired by OpenZeppelin's Pausable contract.
  */
-abstract contract ERC1400Pausable is Context {
+abstract contract Pausable is Context {
 	///@dev Emitted when the pause is triggered by pauser.
 	event Paused(address indexed pauser);
 
