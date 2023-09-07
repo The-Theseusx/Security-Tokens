@@ -54,11 +54,15 @@ contract ERC1400Test is Test {
 	}
 
 	function testFailWhenIssuingToZeroAddress() public {
+		vm.startPrank(TOKEN_ISSUER);
 		ERC1400MockToken.issue(ZERO_ADDRESS, 100e18, "");
+		vm.stopPrank();
 	}
 
 	function testFailWhenIssuingZeroAmount() public {
+		vm.startPrank(TOKEN_ISSUER);
 		ERC1400MockToken.issue(ALICE, 0, "");
+		vm.stopPrank();
 	}
 
 	function testIssueTokensByIssuer() public {
