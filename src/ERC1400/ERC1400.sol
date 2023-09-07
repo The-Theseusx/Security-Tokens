@@ -150,7 +150,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 
 	modifier isValidPartition(bytes32 partition) {
 		require(
-			_partitions[_partitionIndex[partition]] == partition || partition == DEFAULT_PARTITION,
+			partition == DEFAULT_PARTITION || _partitions[_partitionIndex[partition]] == partition,
 			"ERC1400: nonexistent partition"
 		);
 		_;
@@ -1352,7 +1352,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		_balancesByPartition[account][DEFAULT_PARTITION] += amount;
 		_totalSupplyByPartition[DEFAULT_PARTITION] += amount;
 
-		emit Issued(address(0), account, amount, data);
+		emit Issued(operator, account, amount, data);
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, address(0), account, amount, data, "");
 	}
 

@@ -68,11 +68,11 @@ contract ERC1400Test is Test {
 		uint256 balance = ERC1400MockToken.balanceOf(ALICE);
 		assertEq(balance, 100e18, "Alice's balance is not correct");
 		assertEq(ERC1400MockToken.totalSupply(), 100e18, "total supply is not correct");
-		// assertEq(
-		// 	ERC1400MockToken.balanceOfByPartition(DEFAULT_PARTITION, ALICE),
-		// 	100e18,
-		// 	"Alice's balance is not correct"
-		// );
+		assertEq(
+			ERC1400MockToken.balanceOfByPartition(DEFAULT_PARTITION, ALICE),
+			100e18,
+			"Alice's balance is not correct"
+		);
 		assertEq(ERC1400MockToken.totalSupplyByPartition(DEFAULT_PARTITION), 100e18, "total supply is not correct");
 
 		vm.stopPrank();
