@@ -17,7 +17,7 @@ import { IERC1400NFTReceiver } from "./IERC1400NFTReceiver.sol";
  * @dev A token id issued to a partition cannot be issued to any other partition.
  */
 
-contract ERC1400NFT is IERC1400NFT, Context, ERC1643, EIP712, ERC165, AccessControl {
+contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	using Strings for uint256;
 
 	// --------------------------------------------------------------- CONSTANTS --------------------------------------------------------------- //
@@ -175,7 +175,7 @@ contract ERC1400NFT is IERC1400NFT, Context, ERC1643, EIP712, ERC165, AccessCont
 		address tokenIssuer_,
 		address tokenRedeemer_,
 		address tokenTransferAgent_
-	) EIP712(name_, version_) {
+	) EIP712(name_, version_) ERC1643(tokenAdmin_) {
 		require(bytes(name_).length != 0, "ERC1400NFT: invalid name");
 		require(bytes(symbol_).length != 0, "ERC1400NFT: no symbol");
 		require(bytes(version_).length != 0, "ERC1400NFT: invalid version");

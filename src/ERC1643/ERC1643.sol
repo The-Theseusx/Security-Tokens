@@ -1,7 +1,7 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import { Ownable2Step } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
+import { AccessControl } from "openzeppelin-contracts/contracts/access/AccessControl.sol";
 import { IERC1643 } from "./IERC1643.sol";
 
 /**
@@ -9,11 +9,15 @@ import { IERC1643 } from "./IERC1643.sol";
  * @dev ERC1643 support for document management of security tokens
  */
 
-abstract contract ERC1643 is IERC1643, Ownable2Step {
+abstract contract ERC1643 is IERC1643, AccessControl {
 	struct Document {
 		bytes32 docHash; // Hash of the document
 		uint256 lastModified; // Timestamp at which document details was last modified
 		string uri; // URI of the document that exist off-chain
+	}
+
+	constructor(address admin) {
+		_grantRole(DEFAULT_ADMIN_ROLE, admin);
 	}
 
 	/**
@@ -38,7 +42,11 @@ abstract contract ERC1643 is IERC1643, Ownable2Step {
 	 * @param uri Document content.
 	 * @param documentHash Hash of the document [optional parameter].
 	 */
-	function setDocument(bytes32 name, string memory uri, bytes32 documentHash) public virtual override onlyOwner {
+	function setDocument(
+		bytes32 name,
+		string memory uri,
+		bytes32 documentHash
+	) public virtual override onlyRole(DEFAULT_ADMIN_ROLE) {
 		require(name != bytes32(0), "ERC1643: name must not be empty");
 		require(bytes(uri).length > 0, "ERC1643: uri length must be > 0");
 
@@ -62,7 +70,7 @@ abstract contract ERC1643 is IERC1643, Ownable2Step {
 	 * @dev Removes document details for a given document name.
 	 * @param name Name of the document.
 	 */
-	function removeDocument(bytes32 name) public virtual override onlyOwner {
+	function removeDocument(bytes32 name) public virtual override onlyRole(DEFAULT_ADMIN_ROLE) {
 		require(name != bytes32(0), "ERC1643: name must not be empty");
 
 		Document memory doc = documents[name];
