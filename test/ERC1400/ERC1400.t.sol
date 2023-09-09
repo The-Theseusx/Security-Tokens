@@ -4,7 +4,11 @@ pragma solidity ^0.8.0;
 import { Test } from "forge-std/Test.sol";
 import { ERC1400 } from "../../src/ERC1400/ERC1400.sol";
 
+import { Strings } from "openzeppelin-contracts/contracts/utils/Strings.sol";
+
 contract ERC1400Test is Test {
+	using Strings for uint256;
+
 	string public constant TOKEN_NAME = "ERC1400MockToken";
 	string public constant TOKEN_SYMBOL = "ERC1400MTK";
 	string public constant TOKEN_VERSION = "1";
@@ -18,6 +22,10 @@ contract ERC1400Test is Test {
 	address public constant BOB = address(0xb0B);
 
 	bytes32 public constant DEFAULT_PARTITION = bytes32(0);
+
+	// Issuance / Redemption Events
+	event Issued(address indexed operator, address indexed to, uint256 amount, bytes data);
+	event Redeemed(address indexed operator, address indexed from, uint256 amount, bytes data);
 
 	//solhint-disable-next-line var-name-mixedcase
 	ERC1400 public ERC1400MockToken;
@@ -53,14 +61,16 @@ contract ERC1400Test is Test {
 		ERC1400MockToken.issue(ALICE, 100e18, "");
 	}
 
-	function testFailWhenIssuingToZeroAddress() public {
+	function testShouldNotIssueToZeroAddress() public {
 		vm.startPrank(TOKEN_ISSUER);
+		vm.expectRevert("ERC1400: Invalid recipient (zero address)");
 		ERC1400MockToken.issue(ZERO_ADDRESS, 100e18, "");
 		vm.stopPrank();
 	}
 
-	function testFailWhenIssuingZeroAmount() public {
+	function testShouldNotIssueZeroAmount() public {
 		vm.startPrank(TOKEN_ISSUER);
+		vm.expectRevert("ERC1400: zero amount");
 		ERC1400MockToken.issue(ALICE, 0, "");
 		vm.stopPrank();
 	}
@@ -68,16 +78,24 @@ contract ERC1400Test is Test {
 	function testIssueTokensByIssuer() public {
 		vm.startPrank(TOKEN_ISSUER);
 
+		///@dev check the Issued event is emitted
+		vm.expectEmit(true, true, true, true);
+		emit Issued(TOKEN_ISSUER, ALICE, 100e18, "");
+
 		ERC1400MockToken.issue(ALICE, 100e18, "");
-		uint256 balance = ERC1400MockToken.balanceOf(ALICE);
-		assertEq(balance, 100e18, "Alice's balance is not correct");
-		assertEq(ERC1400MockToken.totalSupply(), 100e18, "total supply is not correct");
+
+		assertEq(ERC1400MockToken.balanceOf(ALICE), 100e18, "Alice's total balance should be 100e18");
+		assertEq(ERC1400MockToken.totalSupply(), 100e18, "token total supply should be 100e18");
 		assertEq(
 			ERC1400MockToken.balanceOfByPartition(DEFAULT_PARTITION, ALICE),
 			100e18,
-			"Alice's balance is not correct"
+			"Alice's default partition balance should be 100e18"
 		);
-		assertEq(ERC1400MockToken.totalSupplyByPartition(DEFAULT_PARTITION), 100e18, "total supply is not correct");
+		assertEq(
+			ERC1400MockToken.totalSupplyByPartition(DEFAULT_PARTITION),
+			100e18,
+			"token default partition total supply should be 100e18"
+		);
 
 		vm.stopPrank();
 	}
