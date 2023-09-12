@@ -5,6 +5,7 @@ import { AccessControl } from "openzeppelin-contracts/contracts/access/AccessCon
 import { Pausable } from "openzeppelin-contracts/contracts/security/Pausable.sol";
 import { Context } from "openzeppelin-contracts/contracts/utils/Context.sol";
 import { ERC1643 } from "../ERC1643/ERC1643.sol";
+import { ERC1400ValidateDataParams } from "../utils/DataTypes.sol";
 import { ERC165 } from "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
 import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import { IERC1400 } from "./IERC1400.sol";
@@ -19,7 +20,9 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 
 	///@dev EIP712 typehash for data validation
 	bytes32 public constant ERC1400_DATA_VALIDATION_TYPEHASH =
-		keccak256("ERC1400ValidateData(address from,address to,uint256 amount,bytes32 partition,uint256 nonce)");
+		keccak256(
+			"ERC1400ValidateData(address from,address to,uint256 amount,bytes32 partition,uint256 nonce,uint48 deadline)"
+		);
 
 	///@dev Access control role for the token issuer.
 	bytes32 public constant ERC1400_ISSUER_ROLE = keccak256("ERC1400_ISSUER_ROLE");
@@ -379,7 +382,15 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 			}
 		}
 		if (data.length != 0) {
-			(bool can, ) = _validateData(ERC1400_TRANSFER_AGENT_ROLE, from, to, amount, partition, data);
+			ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
+				authorizerRole: ERC1400_TRANSFER_AGENT_ROLE,
+				from: from,
+				to: to,
+				amount: amount,
+				partition: partition,
+				data: data
+			});
+			(bool can, ) = _validateData(_data);
 			if (!can) return ("0x5f", "ERC1400: ID", bytes32(0));
 		}
 
@@ -442,7 +453,15 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		}
 		if (balanceOfNonPartitioned(operator) < amount) return (false, bytes("0x52"), bytes32(0));
 		if (data.length != 0) {
-			(bool can, ) = _validateData(ERC1400_TRANSFER_AGENT_ROLE, from, to, amount, DEFAULT_PARTITION, data);
+			ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
+				authorizerRole: ERC1400_TRANSFER_AGENT_ROLE,
+				from: from,
+				to: to,
+				amount: amount,
+				partition: DEFAULT_PARTITION,
+				data: data
+			});
+			(bool can, ) = _validateData(_data);
 			if (!can) return (false, bytes("0x5f"), bytes32(0));
 		}
 		return (true, bytes("0x51"), bytes32(0));
@@ -665,14 +684,15 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	) public virtual isValidPartition(partition) returns (bytes32) {
 		address operator = _msgSender();
 		if (data.length != 0) {
-			(bool authorized, address authorizer) = _validateData(
-				ERC1400_TRANSFER_AGENT_ROLE,
-				from,
-				to,
-				amount,
-				partition,
-				data
-			);
+			ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
+				authorizerRole: ERC1400_TRANSFER_AGENT_ROLE,
+				from: from,
+				to: to,
+				amount: amount,
+				partition: partition,
+				data: data
+			});
+			(bool authorized, address authorizer) = _validateData(_data);
 			require(authorized, "ERC1400: Invalid data");
 			_spendNonce(ERC1400_TRANSFER_AGENT_ROLE, authorizer);
 			_transferByPartition(partition, operator, from, to, amount, data, "");
@@ -981,15 +1001,15 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	 */
 	function redeem(uint256 amount, bytes memory data) public virtual override {
 		address operator = _msgSender();
-
-		(bool authorized, address authorizer) = _validateData(
-			ERC1400_REDEEMER_ROLE,
-			operator,
-			address(0),
-			amount,
-			DEFAULT_PARTITION,
-			data
-		);
+		ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
+			authorizerRole: ERC1400_REDEEMER_ROLE,
+			from: operator,
+			to: address(0),
+			amount: amount,
+			partition: DEFAULT_PARTITION,
+			data: data
+		});
+		(bool authorized, address authorizer) = _validateData(_data);
 		require(authorized, "ERC1400: Invalid data");
 		_spendNonce(ERC1400_REDEEMER_ROLE, authorizer);
 
@@ -1022,15 +1042,15 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data
 	) public virtual override isValidPartition(partition) {
 		address operator = _msgSender();
-
-		(bool can, address authorizer) = _validateData(
-			ERC1400_REDEEMER_ROLE,
-			operator,
-			address(0),
-			amount,
-			partition,
-			data
-		);
+		ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
+			authorizerRole: ERC1400_REDEEMER_ROLE,
+			from: operator,
+			to: address(0),
+			amount: amount,
+			partition: partition,
+			data: data
+		});
+		(bool can, address authorizer) = _validateData(_data);
 		require(can, "ERC1400: Invalid data");
 		_spendNonce(ERC1400_REDEEMER_ROLE, authorizer);
 
@@ -1056,15 +1076,16 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 			isOperator(operator, account) || isOperatorForPartition(partition, operator, account),
 			"ERC1400: Not authorized operator"
 		);
+		ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
+			authorizerRole: ERC1400_REDEEMER_ROLE,
+			from: account,
+			to: address(0),
+			amount: amount,
+			partition: partition,
+			data: data
+		});
 		if (partition == DEFAULT_PARTITION) {
-			(bool authorized, address authorizer) = _validateData(
-				ERC1400_REDEEMER_ROLE,
-				account,
-				address(0),
-				amount,
-				partition,
-				data
-			);
+			(bool authorized, address authorizer) = _validateData(_data);
 			require(authorized, "ERC1400: Invalid data");
 			_spendNonce(ERC1400_REDEEMER_ROLE, authorizer);
 			_redeem(_msgSender(), account, amount, data, operatorData);
@@ -1144,7 +1165,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 				isOperatorForPartition(partition, operator, from) ||
 					isOperator(operator, from) ||
 					isController(operator),
-				"ERC1400: transfer operator is not an operator or controller for partition"
+				"ERC1400: not an operator or controller for partition"
 			);
 		}
 		/** @dev prevent zero token transfers (spam transfers) */
@@ -1221,14 +1242,16 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory operatorData
 	) internal virtual {
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
-		(bool authorized, address authorizer) = _validateData(
-			ERC1400_TRANSFER_AGENT_ROLE,
-			from,
-			to,
-			amount,
-			DEFAULT_PARTITION,
-			data
-		);
+		ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
+			authorizerRole: ERC1400_TRANSFER_AGENT_ROLE,
+			from: from,
+			to: to,
+			amount: amount,
+			partition: DEFAULT_PARTITION,
+			data: data
+		});
+
+		(bool authorized, address authorizer) = _validateData(_data);
 		require(authorized, "ERC1400: invalid data");
 		_spendNonce(ERC1400_TRANSFER_AGENT_ROLE, authorizer);
 
@@ -1498,28 +1521,31 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 
 	/**
 	 * @notice validate the data provided by the user when performing transactions that require validated data (signatures)
-	 * @param authorizerRole the role the recovered signer MUST supposed to have
-	 * @param from the address sending tokens
-	 * @param to the address receiving tokens
-	 * @param amount the amount of tokens to be sent
-	 * @param partition the partition from which the tokens are sent
-	 * @param signature the signature provided by the authorizer (data field in parent function)
-	 * @return bool 'true' if the data provided is valid, 'false' if not
+	 * @notice reverts if the data is not encoded with the signature and dealine
+	 * @param validateDataParams struct params containing data to be validated
+	 * @return bool 'true' if the recovered signer has @param authorizerRole, 'false' if not
+	 * @return the recovered signer
 	 */
 	function _validateData(
-		bytes32 authorizerRole,
-		address from,
-		address to,
-		uint256 amount,
-		bytes32 partition,
-		bytes memory signature
+		ERC1400ValidateDataParams memory validateDataParams
 	) internal view virtual returns (bool, address) {
+		(bytes memory signature, uint48 deadline) = abi.decode(validateDataParams.data, (bytes, uint48));
+		require(deadline >= block.timestamp, "ERC1400: Expired signature");
+
 		bytes32 structData = keccak256(
-			abi.encodePacked(ERC1400_DATA_VALIDATION_TYPEHASH, from, to, amount, partition, _roleNonce[authorizerRole])
+			abi.encodePacked(
+				ERC1400_DATA_VALIDATION_TYPEHASH,
+				validateDataParams.from,
+				validateDataParams.to,
+				validateDataParams.amount,
+				validateDataParams.partition,
+				_roleNonce[validateDataParams.authorizerRole],
+				deadline
+			)
 		);
 		bytes32 structDataHash = _hashTypedDataV4(structData);
 		address recoveredSigner = ECDSA.recover(structDataHash, signature);
-		return (hasRole(authorizerRole, recoveredSigner), recoveredSigner);
+		return (hasRole(validateDataParams.authorizerRole, recoveredSigner), recoveredSigner);
 	}
 
 	/**
