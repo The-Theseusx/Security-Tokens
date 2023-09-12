@@ -1398,7 +1398,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		bytes32[] memory partitions = _partitions;
 		uint256 index = _partitionIndex[partition];
 
-		bytes32 currentPartition = partitions[index];
+		bytes32 currentPartition = (index == 0 && partitions.length > 0) ? partitions[index] : DEFAULT_PARTITION;
 
 		if (partition != currentPartition) {
 			///@dev partition does not exist, add partition to contract
