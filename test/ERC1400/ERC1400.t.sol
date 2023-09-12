@@ -138,5 +138,9 @@ contract ERC1400Test is Test {
 			SHARED_SPACES_PARTITION,
 			"Bob's first partition should be keccack256(SHARED_SPACES_PARTITION)"
 		);
+
+		assertEq(ERC1400MockToken.totalPartitions(), 1, "Token should have a total of 1 paritions");
+
+		vm.stopPrank();
 	}
 }
