@@ -21,9 +21,11 @@ contract ERC1400Test is Test {
 	address public constant BOB = address(0xb0B);
 
 	bytes32 public constant DEFAULT_PARTITION = bytes32(0);
+	bytes32 public constant SHARED_SPACES_PARTITION = keccak256("CONDOMINIUM_SHARED_SPACES");
 
 	// Issuance / Redemption Events
 	event Issued(address indexed operator, address indexed to, uint256 amount, bytes data);
+	event IssuedByPartition(bytes32 indexed partition, address indexed to, uint256 amount, bytes data);
 	event Redeemed(address indexed operator, address indexed from, uint256 amount, bytes data);
 
 	//solhint-disable-next-line var-name-mixedcase
@@ -97,5 +99,44 @@ contract ERC1400Test is Test {
 		);
 
 		vm.stopPrank();
+	}
+
+	function testIssueTokenByPartitionByIssuer() public {
+		vm.startPrank(TOKEN_ISSUER);
+
+		vm.expectEmit(true, true, true, true);
+		emit IssuedByPartition(SHARED_SPACES_PARTITION, BOB, 150e18, "");
+
+		ERC1400MockToken.issueByPartition(SHARED_SPACES_PARTITION, BOB, 150e18, "");
+
+		assertEq(ERC1400MockToken.balanceOf(BOB), 150e18, "Bob's balance should be 150e18 tokens");
+		assertEq(ERC1400MockToken.totalSupply(), 150e18, "token total supply should be 100e18");
+		assertEq(
+			ERC1400MockToken.balanceOfByPartition(DEFAULT_PARTITION, BOB),
+			0,
+			"Bob's default partition balance should be 0"
+		);
+		assertEq(
+			ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, BOB),
+			150e18,
+			"Bob's shared space partition balance should be 150e18"
+		);
+		assertEq(
+			ERC1400MockToken.totalSupplyByPartition(DEFAULT_PARTITION),
+			0,
+			"token default partition total supply should be 0"
+		);
+		assertEq(
+			ERC1400MockToken.totalSupplyByPartition(SHARED_SPACES_PARTITION),
+			150e18,
+			"token default partition total supply should be 150e18"
+		);
+
+		bytes32[] memory bobPartitions = ERC1400MockToken.partitionsOf(BOB);
+		assertEq(
+			bobPartitions[0],
+			SHARED_SPACES_PARTITION,
+			"Bob's first partition should be keccack256(SHARED_SPACES_PARTITION)"
+		);
 	}
 }
