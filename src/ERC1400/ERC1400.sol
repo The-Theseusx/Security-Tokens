@@ -1076,19 +1076,20 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 			isOperator(operator, account) || isOperatorForPartition(partition, operator, account),
 			"ERC1400: Not authorized operator"
 		);
-		ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
-			authorizerRole: ERC1400_REDEEMER_ROLE,
-			from: account,
-			to: address(0),
-			amount: amount,
-			partition: partition,
-			data: data
-		});
+
 		if (partition == DEFAULT_PARTITION) {
+			ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
+				authorizerRole: ERC1400_REDEEMER_ROLE,
+				from: account,
+				to: address(0),
+				amount: amount,
+				partition: partition,
+				data: data
+			});
 			(bool authorized, address authorizer) = _validateData(_data);
 			require(authorized, "ERC1400: Invalid data");
 			_spendNonce(ERC1400_REDEEMER_ROLE, authorizer);
-			_redeem(_msgSender(), account, amount, data, operatorData);
+			_redeem(operator, account, amount, data, operatorData);
 			return;
 		}
 		redeemByPartition(partition, amount, data);
