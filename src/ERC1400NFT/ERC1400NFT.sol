@@ -5,6 +5,7 @@ import { AccessControl } from "openzeppelin-contracts/contracts/access/AccessCon
 import { Context } from "openzeppelin-contracts/contracts/utils/Context.sol";
 import { ERC165 } from "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
 import { ERC1643 } from "../ERC1643/ERC1643.sol";
+import { ERC1400NFTValidateDataParams } from "../utils/DataTypes.sol";
 import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import { Strings } from "openzeppelin-contracts/contracts/utils/Strings.sol";
@@ -26,7 +27,9 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 
 	///@dev EIP712 typehash for data validation
 	bytes32 public constant ERC1400NFT_DATA_VALIDATION_HASH =
-		keccak256("ERC1400NFTValidateData(address from,address to,uint256 tokenId,bytes32 partition,uint256 nonce)");
+		keccak256(
+			"ERC1400NFTValidateData(address from,address to,uint256 tokenId,bytes32 partition,uint256 nonce,uint48 deadline)"
+		);
 
 	///@dev Access control role for the token issuer.
 	bytes32 public constant ERC1400_NFT_ISSUER_ROLE = keccak256("ERC1400_NFT_ISSUER_ROLE");
@@ -1218,7 +1221,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 				isOperatorForPartition(partition, operator, from) ||
 					isOperator(operator, from) ||
 					isController(operator),
-				"ERC1400NFT: transfer operator is not an operator or controller for partition"
+				"ERC1400NFT: not an operator or controller for partition"
 			);
 		}
 
@@ -1418,7 +1421,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		}
 		require(exists(tokenId), "ERC1400NFT: Token does not exist");
 		require(_owners[tokenId] == account, "ERC1400NFT: Token is not owned by account");
-		require(_balancesByPartition[account][DEFAULT_PARTITION] >= tokenId, "ERC1400NFT: Not enough funds");
 
 		_balances[account] -= 1;
 		_balancesByPartition[account][DEFAULT_PARTITION] -= 1;
