@@ -3,7 +3,6 @@ pragma solidity ^0.8.0;
 
 import { Test } from "forge-std/Test.sol";
 import { ERC1400 } from "../../src/ERC1400/ERC1400.sol";
-
 import { Strings } from "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 contract ERC1400Test is Test {
