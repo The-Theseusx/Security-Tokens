@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MIT
-pragma solidity 0.8.21;
+pragma solidity ^0.8.0;
 import { Strings } from "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 abstract contract ERC1400TestErrors {
