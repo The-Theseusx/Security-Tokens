@@ -21,12 +21,12 @@ abstract contract ERC1400BaseTest is Test, ERC1400TestStorage, ERC1400TestErrors
 		sigUtilsContract = new SigUtils(DOMAIN_SEPARATOR, ERC1400MockToken.ERC1400_DATA_VALIDATION_TYPEHASH());
 
 		vm.startPrank(tokenIssuer);
-		issueTokens(DEFAULT_PARTITION, tokenAdmin, INITIAL_SUPPLY, "");
+		_issueTokens(DEFAULT_PARTITION, tokenAdmin, INITIAL_SUPPLY, "");
 		vm.stopPrank();
 	}
 
 	///@dev start neccesary prank before calling this function
-	function issueTokens(bytes32 partition, address to, uint256 amount, bytes memory data) internal {
+	function _issueTokens(bytes32 partition, address to, uint256 amount, bytes memory data) internal {
 		if (partition == DEFAULT_PARTITION) ERC1400MockToken.issue(to, amount, data);
 		else ERC1400MockToken.issueByPartition(partition, to, amount, data);
 	}
