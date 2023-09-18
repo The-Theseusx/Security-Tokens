@@ -1510,7 +1510,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		require(deadline >= block.timestamp, "ERC1400: Expired signature");
 
 		bytes32 structData = keccak256(
-			abi.encodePacked(
+			abi.encode(
 				ERC1400NFT_DATA_VALIDATION_HASH,
 				validateDataParams.from,
 				validateDataParams.to,

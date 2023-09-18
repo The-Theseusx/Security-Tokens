@@ -1534,7 +1534,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		require(deadline >= block.timestamp, "ERC1400: Expired signature");
 
 		bytes32 structData = keccak256(
-			abi.encodePacked(
+			abi.encode(
 				ERC1400_DATA_VALIDATION_TYPEHASH,
 				validateDataParams.from,
 				validateDataParams.to,
