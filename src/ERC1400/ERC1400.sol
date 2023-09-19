@@ -308,7 +308,8 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes32 partition,
 		address user
 	) public view virtual isValidPartition(partition) returns (bool) {
-		return partition == _partitionsOf[user][_partitionIndexOfUser[user][partition]];
+		return
+			_partitionsOf[user].length != 0 && partition == _partitionsOf[user][_partitionIndexOfUser[user][partition]];
 	}
 
 	/// @return true if the operator address is allowed to control all tokens of a tokenHolder irrespective of partition.
@@ -1428,7 +1429,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes32[] memory partitions = _partitions;
 		uint256 index = _partitionIndex[partition];
 
-		bytes32 currentPartition = (index == 0 && partitions.length > 0) ? partitions[index] : DEFAULT_PARTITION;
+		bytes32 currentPartition = partitions.length > 0 ? partitions[index] : DEFAULT_PARTITION;
 
 		if (partition != currentPartition) {
 			///@dev partition does not exist, add partition to contract
