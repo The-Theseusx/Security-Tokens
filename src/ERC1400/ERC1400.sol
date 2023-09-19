@@ -147,7 +147,10 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	// --------------------------------------------------------------- MODIFIERS --------------------------------------------------------------- //
 
 	modifier onlyController() {
-		require(_controllers[_controllerIndex[_msgSender()]] == _msgSender(), "ERC1400: caller is not a controller");
+		require(
+			_controllers.length != 0 && _controllers[_controllerIndex[_msgSender()]] == _msgSender(),
+			"ERC1400: not a controller"
+		);
 		_;
 	}
 
