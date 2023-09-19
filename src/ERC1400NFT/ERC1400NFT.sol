@@ -299,7 +299,8 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		bytes32 partition,
 		address user
 	) public view virtual isValidPartition(partition) returns (bool) {
-		return partition == _partitionsOf[user][_partitionIndexOfUser[user][partition]];
+		return (_partitionsOf[user].length != 0 &&
+			partition == _partitionsOf[user][_partitionIndexOfUser[user][partition]]);
 	}
 
 	/**
