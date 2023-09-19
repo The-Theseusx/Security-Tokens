@@ -27,6 +27,7 @@ abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
 	}
 
 	function testIssueTokensByIssuer() public {
+		///@dev note, total token supply is 1 million. 98 million in the defaul partition and 2 miliion in shared space partition
 		vm.startPrank(tokenIssuer);
 
 		///@dev check the Issued event is emitted
@@ -35,7 +36,7 @@ abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
 
 		ERC1400MockToken.issue(alice, 100e18, "");
 
-		assertEq(ERC1400MockToken.balanceOf(alice), 100e18, "Alice's total balance should be 100e18");
+		assertEq(ERC1400MockToken.balanceOf(alice), 1_000_100e18, "Alice's total balance should be 1_000_100e18");
 		assertEq(
 			ERC1400MockToken.totalSupply(),
 			INITIAL_SUPPLY + 100e18,
@@ -48,7 +49,7 @@ abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
 		);
 		assertEq(
 			ERC1400MockToken.totalSupplyByPartition(DEFAULT_PARTITION),
-			INITIAL_SUPPLY + 100e18,
+			INITIAL_DEFAULT_PARTITION_SUPPLY + 100e18,
 			"token default partition total supply should be 100_000_100e18"
 		);
 
@@ -69,7 +70,7 @@ abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
 
 		ERC1400MockToken.issueByPartition(SHARED_SPACES_PARTITION, bob, 150e18, "");
 
-		assertEq(ERC1400MockToken.balanceOf(bob), 150e18, "Bob's balance should be 150e18 tokens");
+		assertEq(ERC1400MockToken.balanceOf(bob), 1_000_150e18, "Bob's balance should be 1_000_150e18 tokens");
 		assertEq(
 			ERC1400MockToken.totalSupply(),
 			INITIAL_SUPPLY + 150e18,
@@ -82,18 +83,18 @@ abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
 		);
 		assertEq(
 			ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, bob),
-			150e18,
-			"Bob's shared space partition balance should be 150e18"
+			1_000_150e18,
+			"Bob's shared space partition balance should be 1_000_150e18"
 		);
 		assertEq(
 			ERC1400MockToken.totalSupplyByPartition(DEFAULT_PARTITION),
-			INITIAL_SUPPLY,
-			"token default partition total supply should be 100_000_000e18"
+			INITIAL_DEFAULT_PARTITION_SUPPLY,
+			"token default partition total supply should be 98_000_000e18"
 		);
 		assertEq(
 			ERC1400MockToken.totalSupplyByPartition(SHARED_SPACES_PARTITION),
-			150e18,
-			"token default partition total supply should be 150e18"
+			2_000_150e18,
+			"token default partition total supply should be 2_000_150e18"
 		);
 
 		bytes32[] memory bobPartitions = ERC1400MockToken.partitionsOf(bob);

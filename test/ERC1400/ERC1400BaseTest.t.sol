@@ -21,7 +21,12 @@ abstract contract ERC1400BaseTest is Test, ERC1400TestStorage, ERC1400TestErrors
 		sigUtilsContract = new SigUtils(DOMAIN_SEPARATOR, ERC1400MockToken.ERC1400_DATA_VALIDATION_TYPEHASH());
 
 		vm.startPrank(tokenIssuer);
-		_issueTokens(DEFAULT_PARTITION, tokenAdmin, INITIAL_SUPPLY, "");
+		_issueTokens(DEFAULT_PARTITION, tokenAdmin, INITIAL_DEFAULT_PARTITION_SUPPLY, "");
+
+		///@dev issue to Alice and Bob 1_000_000e18 tokens each in the shared spaces partition
+		_issueTokens(SHARED_SPACES_PARTITION, alice, 1_000_000e18, "");
+		_issueTokens(SHARED_SPACES_PARTITION, bob, 1_000_000e18, "");
+
 		vm.stopPrank();
 	}
 
