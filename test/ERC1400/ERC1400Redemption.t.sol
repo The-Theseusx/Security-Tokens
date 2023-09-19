@@ -17,6 +17,43 @@ abstract contract ERC1400RedemptionTest is ERC1400BaseTest, ERC1400SigUtils {
 		vm.stopPrank();
 	}
 
+	function testRedemptionShouldFailWhenSignatureDeadlinePasses() public {
+		///@dev warp block.timestamp by 1 hour
+		skip(1 hours);
+
+		///@dev @notice 1 second used as deadline
+		bytes memory validationData = prepareRedemptionSignature(
+			TOKEN_REDEEMER_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			100e18,
+			0,
+			1
+		);
+
+		vm.startPrank(tokenAdmin);
+		vm.expectRevert("ERC1400: Expired signature");
+		ERC1400MockToken.redeem(100e18, validationData);
+		vm.stopPrank();
+	}
+
+	function testRedemptionShouldFailWhenWrongNonceUsed() public {
+		///@dev @notice wrong nonce of 5 used, instead of 0
+		bytes memory validationData = prepareRedemptionSignature(
+			TOKEN_REDEEMER_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			100e18,
+			5,
+			0
+		);
+
+		vm.startPrank(tokenAdmin);
+		vm.expectRevert("ERC1400: Invalid data");
+		ERC1400MockToken.redeem(100e18, validationData);
+		vm.stopPrank();
+	}
+
 	function testRedemptionAuthorizedByTokenRedeemer() public {
 		bytes memory validationData = prepareRedemptionSignature(
 			TOKEN_REDEEMER_PK,
