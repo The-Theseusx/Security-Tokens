@@ -147,7 +147,10 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	// --------------------------------------------------------------- MODIFIERS --------------------------------------------------------------- //
 
 	modifier onlyController() {
-		require(_controllers[_controllerIndex[_msgSender()]] == _msgSender(), "ERC1400NFT: caller is not a controller");
+		require(
+			_controllers.length != 0 && _controllers[_controllerIndex[_msgSender()]] == _msgSender(),
+			"ERC1400NFT: not a controller"
+		);
 		_;
 	}
 
@@ -162,7 +165,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	modifier isOwnerOrApproved(address spender, uint256 tokenId) {
 		require(
 			ownerOf(tokenId) == _msgSender() || getApproved(tokenId) == spender,
-			"ERC1400NFT: caller is not owner or approved"
+			"ERC1400NFT: not owner or approved"
 		);
 		_;
 	}
@@ -279,7 +282,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 
 	/// @return true if @param controller is a controller of this token.
 	function isController(address controller) public view virtual returns (bool) {
-		return controller == _controllers[_controllerIndex[controller]];
+		return _controllers.length != 0 && controller == _controllers[_controllerIndex[controller]];
 	}
 
 	/// @return the nonce of a role.
@@ -1438,7 +1441,8 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 			require(
 				isOperator(operator, account) ||
 					isOperatorForPartition(DEFAULT_PARTITION, operator, account) ||
-					isController(operator),
+					isController(operator) ||
+					hasRole(ERC1400_NFT_REDEEMER_ROLE, operator),
 				"ERC1400NFT: transfer operator is not authorized"
 			);
 		}
