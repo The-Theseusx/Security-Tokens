@@ -27,6 +27,7 @@ abstract contract ERC1400TestStorage is Test {
 	bytes32 public constant DOMAIN_SEPARATOR = 0x256897f89009cd54240b5755edbdc1612b7c5fb63ae29dbe64277a5dccfa3c4b;
 
 	address public tokenAdmin = vm.addr(TOKEN_ADMIN_PK);
+	address public notTokenAdmin = vm.addr(NOT_ADMIN_PK);
 	address public tokenIssuer = vm.addr(TOKEN_ISSUER_PK);
 	address public tokenRedeemer = vm.addr(TOKEN_REDEEMER_PK);
 	address public tokenTransferAgent = vm.addr(TOKEN_TRANSFER_AGENT_PK);
