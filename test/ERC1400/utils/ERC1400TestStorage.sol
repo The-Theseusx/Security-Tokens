@@ -20,7 +20,10 @@ abstract contract ERC1400TestStorage is Test {
 
 	address public constant ZERO_ADDRESS = address(0);
 
+	///@notice this is token total supply irrespective of partition
 	uint256 public constant INITIAL_SUPPLY = 100_000_000e18;
+	uint256 public constant INITIAL_DEFAULT_PARTITION_SUPPLY = 98_000_000e18;
+	uint256 public constant INITIAL_SHARED_SPACES_PARTITION_SUPPLY = 2_000_000e18;
 
 	bytes32 public constant DEFAULT_PARTITION = bytes32(0);
 	bytes32 public constant SHARED_SPACES_PARTITION = keccak256("CONDOMINIUM_SHARED_SPACES");
