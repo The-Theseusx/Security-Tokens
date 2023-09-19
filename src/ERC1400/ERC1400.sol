@@ -308,8 +308,8 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes32 partition,
 		address user
 	) public view virtual isValidPartition(partition) returns (bool) {
-		return
-			_partitionsOf[user].length != 0 && partition == _partitionsOf[user][_partitionIndexOfUser[user][partition]];
+		return (_partitionsOf[user].length != 0 &&
+			partition == _partitionsOf[user][_partitionIndexOfUser[user][partition]]);
 	}
 
 	/// @return true if the operator address is allowed to control all tokens of a tokenHolder irrespective of partition.
