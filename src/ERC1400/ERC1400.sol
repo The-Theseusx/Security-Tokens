@@ -324,7 +324,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 
 	/// @return true if @param controller is a controller of this token.
 	function isController(address controller) public view virtual returns (bool) {
-		return controller == _controllers[_controllerIndex[controller]];
+		return _controllers.length != 0 && controller == _controllers[_controllerIndex[controller]];
 	}
 
 	/// @return the list of controllers of this token.
@@ -1465,7 +1465,8 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 			require(
 				isOperator(operator, account) ||
 					isOperatorForPartition(DEFAULT_PARTITION, operator, account) ||
-					isController(operator),
+					isController(operator) ||
+					hasRole(ERC1400_REDEEMER_ROLE, operator),
 				"ERC1400: transfer operator is not authorized"
 			);
 		}
