@@ -20,4 +20,13 @@ contract ERC1400Test is ERC1400IssuanceTest, ERC1400RedemptionTest {
 		uint8 decimals = ERC1400MockToken.decimals();
 		assertEq(decimals, uint8(18), "token decimals is not correct");
 	}
+
+	function testShouldNotDisableIssuanceWhenNotAdmin() public {
+		string memory errMsg = accessControlError(notTokenAdmin, ERC1400MockToken.ERC1400_ADMIN_ROLE());
+
+		vm.startPrank(notTokenAdmin);
+		vm.expectRevert(bytes(errMsg));
+		ERC1400MockToken.disableIssuance();
+		vm.stopPrank();
+	}
 }
