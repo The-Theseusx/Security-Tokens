@@ -6,6 +6,8 @@ import { ERC1400 } from "../../src/ERC1400/ERC1400.sol";
 import { ERC1400BaseTest } from "./ERC1400BaseTest.t.sol";
 
 abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
+	/***************************************************************** issue() *****************************************************************/
+
 	function testShouldFailWhenIssuingNotByIssuer() public {
 		string memory errMsg = accessControlError(address(this), ERC1400MockToken.ERC1400_ISSUER_ROLE());
 		vm.expectRevert(bytes(errMsg));
@@ -23,6 +25,17 @@ abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
 		vm.startPrank(tokenIssuer);
 		vm.expectRevert("ERC1400: zero amount");
 		ERC1400MockToken.issue(alice, 0, "");
+		vm.stopPrank();
+	}
+
+	function testShouldNotIssueWhenIssuanceDisabled() public {
+		vm.startPrank(tokenAdmin);
+		ERC1400MockToken.disableIssuance();
+		vm.stopPrank();
+
+		vm.startPrank(tokenIssuer);
+		vm.expectRevert("ERC1400: Token is not issuable");
+		ERC1400MockToken.issue(alice, 100e18, "");
 		vm.stopPrank();
 	}
 
@@ -94,10 +107,23 @@ abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
 		);
 	}
 
+	/***************************************************************** issueByPartition() *****************************************************************/
+
 	function testIssueByPartitionFailWhenIssuingNotByIssuer() public {
 		string memory errMsg = accessControlError(address(this), ERC1400MockToken.ERC1400_ISSUER_ROLE());
 		vm.expectRevert(bytes(errMsg));
 		ERC1400MockToken.issueByPartition(SHARED_SPACES_PARTITION, bob, 150e18, "");
+	}
+
+	function testShouldNotIssueByPartitionWhenIssuanceDisabled() public {
+		vm.startPrank(tokenAdmin);
+		ERC1400MockToken.disableIssuance();
+		vm.stopPrank();
+
+		vm.startPrank(tokenIssuer);
+		vm.expectRevert("ERC1400: Token is not issuable");
+		ERC1400MockToken.issueByPartition(SHARED_SPACES_PARTITION, alice, 100e18, "");
+		vm.stopPrank();
 	}
 
 	function testShouldNotIssueByPartitionToNonERC1400ReceiverImplementer() public {
