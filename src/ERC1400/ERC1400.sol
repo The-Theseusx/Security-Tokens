@@ -24,6 +24,9 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 			"ERC1400ValidateData(address from,address to,uint256 amount,bytes32 partition,uint256 nonce,uint48 deadline)"
 		);
 
+	///@dev Access control role for token admin.
+	bytes32 public constant ERC1400_ADMIN_ROLE = keccak256("ERC1400_ADMIN_ROLE");
+
 	///@dev Access control role for the token issuer.
 	bytes32 public constant ERC1400_ISSUER_ROLE = keccak256("ERC1400_ISSUER_ROLE");
 
@@ -187,10 +190,15 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		_version = version_;
 		_isIssuable = true;
 
-		_grantRole(DEFAULT_ADMIN_ROLE, tokenAdmin_);
+		_grantRole(DEFAULT_ADMIN_ROLE, tokenAdmin_); ///@dev give default admin role to token admin
+		_grantRole(ERC1400_ADMIN_ROLE, tokenAdmin_); ///@dev token admin role. Recommended over DEFAULT_ADMIN_ROLE.
 		_grantRole(ERC1400_ISSUER_ROLE, tokenIssuer_);
 		_grantRole(ERC1400_REDEEMER_ROLE, tokenRedeemer_);
 		_grantRole(ERC1400_TRANSFER_AGENT_ROLE, tokenTransferAgent_);
+
+		_setRoleAdmin(ERC1400_ISSUER_ROLE, ERC1400_ADMIN_ROLE);
+		_setRoleAdmin(ERC1400_REDEEMER_ROLE, ERC1400_ADMIN_ROLE);
+		_setRoleAdmin(ERC1400_TRANSFER_AGENT_ROLE, ERC1400_ADMIN_ROLE);
 	}
 
 	// --------------------------------------------------------------- PUBLIC GETTERS --------------------------------------------------------------- //
@@ -904,7 +912,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	/**
 	 * @notice add controllers for the token.
 	 */
-	function addControllers(address[] memory controllers) public virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+	function addControllers(address[] memory controllers) public virtual onlyRole(ERC1400_ADMIN_ROLE) {
 		uint256 controllersLength = controllers.length;
 		uint256 i;
 
@@ -930,7 +938,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	/**
 	 * @notice remove controllers for the token.
 	 */
-	function removeControllers(address[] memory controllers) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+	function removeControllers(address[] memory controllers) external virtual onlyRole(ERC1400_ADMIN_ROLE) {
 		uint256 controllersLength = controllers.length;
 		uint256 i;
 
@@ -960,7 +968,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	/**
 	 * @dev disables issuance of tokens, can only be called by the owner
 	 */
-	function disableIssuance() public virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+	function disableIssuance() public virtual onlyRole(ERC1400_ADMIN_ROLE) {
 		_disableIssuance();
 	}
 
