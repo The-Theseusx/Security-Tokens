@@ -977,7 +977,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		uint256 amount,
 		bytes memory data
 	) public virtual override onlyRole(ERC1400_ISSUER_ROLE) {
-		_issue(_msgSender(), account, amount, data);
+		_issueByPartition(DEFAULT_PARTITION, _msgSender(), account, amount, data);
 	}
 
 	/**
@@ -1017,7 +1017,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		require(authorized, "ERC1400: Invalid data");
 		_spendNonce(ERC1400_REDEEMER_ROLE, authorizer);
 
-		_redeem(operator, operator, amount, data, "");
+		_redeemByPartition(DEFAULT_PARTITION, operator, operator, amount, data, "");
 	}
 
 	/**
@@ -1031,7 +1031,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		uint256 amount,
 		bytes memory data
 	) public virtual override onlyRole(ERC1400_REDEEMER_ROLE) {
-		_redeem(_msgSender(), tokenHolder, amount, data, "");
+		_redeemByPartition(DEFAULT_PARTITION, _msgSender(), tokenHolder, amount, data, "");
 	}
 
 	/**
@@ -1080,23 +1080,19 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 			isOperator(operator, account) || isOperatorForPartition(partition, operator, account),
 			"ERC1400: Not authorized operator"
 		);
+		ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
+			authorizerRole: ERC1400_REDEEMER_ROLE,
+			from: account,
+			to: address(0),
+			amount: amount,
+			partition: partition,
+			data: data
+		});
+		(bool authorized, address authorizer) = _validateData(_data);
+		require(authorized, "ERC1400: Invalid data");
+		_spendNonce(ERC1400_REDEEMER_ROLE, authorizer);
 
-		if (partition == DEFAULT_PARTITION) {
-			ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
-				authorizerRole: ERC1400_REDEEMER_ROLE,
-				from: account,
-				to: address(0),
-				amount: amount,
-				partition: partition,
-				data: data
-			});
-			(bool authorized, address authorizer) = _validateData(_data);
-			require(authorized, "ERC1400: Invalid data");
-			_spendNonce(ERC1400_REDEEMER_ROLE, authorizer);
-			_redeem(operator, account, amount, data, operatorData);
-			return;
-		}
-		redeemByPartition(partition, amount, data);
+		_redeemByPartition(partition, operator, account, amount, data, operatorData);
 	}
 
 	/**
@@ -1114,7 +1110,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	) public virtual override onlyController {
 		address operator = _msgSender();
 
-		_redeem(operator, tokenHolder, amount, data, operatorData);
+		_redeemByPartition(DEFAULT_PARTITION, operator, tokenHolder, amount, data, operatorData);
 
 		emit ControllerRedemption(operator, tokenHolder, amount, data, operatorData);
 	}
@@ -1359,33 +1355,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	}
 
 	/**
-	 * @notice internal function to issue tokens from the default partition.
-	 * @param operator the address performing the issuance
-	 * @param account the address to issue tokens to
-	 * @param amount the amount to issue
-	 * @param data additional data attached to the issuance
-	 */
-	function _issue(address operator, address account, uint256 amount, bytes memory data) internal virtual {
-		require(account != address(0), "ERC1400: Invalid recipient (zero address)");
-		require(_isIssuable, "ERC1400: Token is not issuable");
-		require(amount != 0, "ERC1400: zero amount");
-
-		_beforeTokenTransfer(DEFAULT_PARTITION, operator, address(0), account, amount, data, "");
-		require(
-			_checkOnERC1400Received(DEFAULT_PARTITION, operator, address(0), account, amount, data, ""),
-			"ERC1400: transfer to non ERC1400Receiver implementer"
-		);
-
-		_totalSupply += amount;
-		_balances[account] += amount;
-		_balancesByPartition[account][DEFAULT_PARTITION] += amount;
-		_totalSupplyByPartition[DEFAULT_PARTITION] += amount;
-
-		emit Issued(operator, account, amount, data);
-		_afterTokenTransfer(DEFAULT_PARTITION, operator, address(0), account, amount, data, "");
-	}
-
-	/**
 	 * @notice internal function to issue tokens from any partition but the default one.
 	 * @param partition the partition to issue tokens from
 	 * @param operator the address performing the issuance
@@ -1402,7 +1371,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	) internal virtual {
 		require(account != address(0), "ERC1400: Invalid recipient (zero address)");
 		require(_isIssuable, "ERC1400: Token is not issuable");
-		require(partition != DEFAULT_PARTITION, "ERC1400: Invalid partition (default)");
+		//require(partition != DEFAULT_PARTITION, "ERC1400: Invalid partition (default)");
 		require(amount != 0, "ERC1400: zero amount");
 
 		_beforeTokenTransfer(partition, operator, address(0), account, amount, data, "");
@@ -1418,7 +1387,8 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 
 		_addTokenToPartitionList(partition, account);
 
-		emit IssuedByPartition(partition, account, amount, data);
+		if (partition == DEFAULT_PARTITION) emit Issued(operator, account, amount, data);
+		else emit IssuedByPartition(partition, account, amount, data);
 		_afterTokenTransfer(partition, operator, address(0), account, amount, data, "");
 	}
 
@@ -1450,43 +1420,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	}
 
 	/**
-	 * @notice burns tokens from a recipient's default partition.
-	 * @param operator the address performing the redeem
-	 * @param account the address to redeem tokens from
-	 * @param amount the amount to redeem
-	 * @param data additional data attached to the redeem process
-	 * @param operatorData additional data attached to the redeem process by the operator (if any)
-	 */
-	function _redeem(
-		address operator,
-		address account,
-		uint256 amount,
-		bytes memory data,
-		bytes memory operatorData
-	) internal virtual {
-		_beforeTokenTransfer(DEFAULT_PARTITION, operator, account, address(0), amount, data, operatorData);
-		if (operator != account) {
-			require(
-				isOperator(operator, account) ||
-					isOperatorForPartition(DEFAULT_PARTITION, operator, account) ||
-					isController(operator) ||
-					hasRole(ERC1400_REDEEMER_ROLE, operator),
-				"ERC1400: transfer operator is not authorized"
-			);
-		}
-		require(amount != 0, "ERC1400: zero amount");
-		require(_balancesByPartition[account][DEFAULT_PARTITION] >= amount, "ERC1400: Not enough funds");
-
-		_balances[account] -= amount;
-		_balancesByPartition[account][DEFAULT_PARTITION] -= amount;
-		_totalSupply -= amount;
-		_totalSupplyByPartition[DEFAULT_PARTITION] -= amount;
-
-		emit Redeemed(operator, account, amount, data);
-		_afterTokenTransfer(DEFAULT_PARTITION, operator, account, address(0), amount, data, operatorData);
-	}
-
-	/**
 	 * @notice internal function to redeem tokens of any partition including the default one.
 	 * @param partition the partition to redeem tokens from
 	 * @param operator the address performing the redemption
@@ -1504,15 +1437,16 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory operatorData
 	) internal virtual {
 		_beforeTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
-		require(partition != DEFAULT_PARTITION, "ERC1400: Wrong partition (DEFAULT_PARTITION)");
 		require(_balancesByPartition[account][partition] >= amount, "ERC1400: Insufficient balance");
 		require(amount != 0, "ERC1400: zero amount");
+
 		if (operator != account) {
 			require(
 				isOperatorForPartition(partition, operator, account) ||
 					isOperator(operator, account) ||
-					isController(operator),
-				"ERC1400: transfer operator is not authorized"
+					isController(operator) ||
+					hasRole(ERC1400_REDEEMER_ROLE, operator),
+				"ERC1400: operator not authorized"
 			);
 		}
 
@@ -1521,7 +1455,8 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		_totalSupply -= amount;
 		_totalSupplyByPartition[partition] -= amount;
 
-		emit RedeemedByPartition(partition, operator, account, amount, data, operatorData);
+		if (partition == DEFAULT_PARTITION) emit Redeemed(operator, account, amount, data);
+		else emit RedeemedByPartition(partition, operator, account, amount, data, operatorData);
 		_afterTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
 	}
 
