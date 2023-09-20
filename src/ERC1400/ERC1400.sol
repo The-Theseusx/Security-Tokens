@@ -1371,7 +1371,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	) internal virtual {
 		require(account != address(0), "ERC1400: Invalid recipient (zero address)");
 		require(_isIssuable, "ERC1400: Token is not issuable");
-		//require(partition != DEFAULT_PARTITION, "ERC1400: Invalid partition (default)");
 		require(amount != 0, "ERC1400: zero amount");
 
 		_beforeTokenTransfer(partition, operator, address(0), account, amount, data, "");
