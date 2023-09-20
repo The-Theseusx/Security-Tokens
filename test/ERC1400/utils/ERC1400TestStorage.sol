@@ -20,6 +20,11 @@ abstract contract ERC1400TestStorage is Test {
 	uint256 public constant ALICE_PK = 0xA11cE;
 	uint256 public constant BOB_PK = 0xB0b;
 
+	uint256 public constant TOKEN_ADMIN_OPERATOR_PK = 0x100093A0;
+	uint256 public constant NOT_TOKEN_ADMIN_OPERATOR_PK = 0x419093A0;
+	uint256 public constant ALICE_OPERATOR_PK = 0xA11cE093A0;
+	uint256 public constant BOB_OPERATOR_PK = 0xB0b093A0;
+
 	address public constant ZERO_ADDRESS = address(0);
 
 	///@notice this is token total supply irrespective of partition
@@ -38,6 +43,11 @@ abstract contract ERC1400TestStorage is Test {
 	address public tokenTransferAgent = vm.addr(TOKEN_TRANSFER_AGENT_PK);
 	address public alice = vm.addr(ALICE_PK);
 	address public bob = vm.addr(BOB_PK);
+
+	address public tokenAdminOperator = vm.addr(TOKEN_ADMIN_OPERATOR_PK);
+	address public notTokenAdminOperator = vm.addr(NOT_TOKEN_ADMIN_OPERATOR_PK);
+	address public aliceOperator = vm.addr(ALICE_OPERATOR_PK);
+	address public bobOperator = vm.addr(BOB_OPERATOR_PK);
 
 	//solhint-disable-next-line var-name-mixedcase
 	ERC1400 public ERC1400MockToken;
