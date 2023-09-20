@@ -18,6 +18,15 @@ abstract contract ERC1400RedemptionTest is ERC1400BaseTest, ERC1400SigUtils {
 		vm.stopPrank();
 	}
 
+	function testRedemptionShouldFailWhenNoDataPassedIn() public {
+		///@dev expect a revert when no data is passed in.
+		///@notice abi.decode in _validateData will fail in this case.
+		vm.startPrank(tokenAdmin);
+		vm.expectRevert();
+		ERC1400MockToken.redeem(100e18, "");
+		vm.stopPrank();
+	}
+
 	function testRedemptionShouldFailWhenSignatureDeadlinePasses() public {
 		///@dev warp block.timestamp by 1 hour
 		skip(1 hours);
@@ -67,7 +76,7 @@ abstract contract ERC1400RedemptionTest is ERC1400BaseTest, ERC1400SigUtils {
 
 		///@dev @notice notTokenAdmin does not have any ERC1400 tokens
 		vm.startPrank(notTokenAdmin);
-		vm.expectRevert("ERC1400: Not enough funds");
+		vm.expectRevert("ERC1400: Insufficient balance");
 		ERC1400MockToken.redeem(100e18, validationData);
 		vm.stopPrank();
 	}
@@ -141,7 +150,7 @@ abstract contract ERC1400RedemptionTest is ERC1400BaseTest, ERC1400SigUtils {
 	function testRedeemFromShouldFailWithInsufficientBalance() public {
 		///@dev @notice notTokenAdmin has no tokens
 		vm.startPrank(tokenRedeemer);
-		vm.expectRevert("ERC1400: Not enough funds");
+		vm.expectRevert("ERC1400: Insufficient balance");
 		ERC1400MockToken.redeemFrom(notTokenAdmin, 100e18, "");
 		vm.stopPrank();
 	}
@@ -212,15 +221,76 @@ abstract contract ERC1400RedemptionTest is ERC1400BaseTest, ERC1400SigUtils {
 		bytes memory validationData = prepareRedemptionSignature(
 			TOKEN_REDEEMER_PK,
 			SHARED_SPACES_PARTITION,
-			tokenAdmin,
+			alice,
 			100e18,
 			0,
 			1
 		);
 
-		vm.startPrank(tokenAdmin);
+		vm.startPrank(alice);
 		vm.expectRevert("ERC1400: Expired signature");
-		ERC1400MockToken.redeem(100e18, validationData);
+		ERC1400MockToken.redeemByPartition(SHARED_SPACES_PARTITION, 100e18, validationData);
 		vm.stopPrank();
 	}
+
+	function testRedeemByPartitionShouldFailWhenInvalidNonceUsed() public {
+		///@dev @notice wrong nonce of 10 used, instead of 0
+		bytes memory validationData = prepareRedemptionSignature(
+			TOKEN_REDEEMER_PK,
+			SHARED_SPACES_PARTITION,
+			alice,
+			100e18,
+			10,
+			0
+		);
+
+		vm.startPrank(alice);
+		vm.expectRevert("ERC1400: Invalid data");
+		ERC1400MockToken.redeemByPartition(SHARED_SPACES_PARTITION, 100e18, validationData);
+		vm.stopPrank();
+	}
+
+	function testRedeemByPartitionShouldFailWhenNoDataPassedIn() public {
+		///@dev expect a revert when no data is passed in.
+		///@notice abi.decode in _validateData will fail in this case.
+		vm.startPrank(tokenAdmin);
+		vm.expectRevert();
+		ERC1400MockToken.redeemByPartition(SHARED_SPACES_PARTITION, 100e18, "");
+		vm.stopPrank();
+	}
+
+	function testRedeemByPartitionShouldFailWithInsufficientBalance() public {
+		bytes memory validationData = prepareRedemptionSignature(
+			TOKEN_REDEEMER_PK,
+			SHARED_SPACES_PARTITION,
+			notTokenAdmin,
+			100e18,
+			0,
+			0
+		);
+
+		///@dev @notice notTokenAdmin does not have any ERC1400 tokens, both default and shared_space partition balance = 0
+		vm.startPrank(notTokenAdmin);
+		vm.expectRevert("ERC1400: Insufficient balance");
+		ERC1400MockToken.redeemByPartition(SHARED_SPACES_PARTITION, 100e18, validationData);
+		vm.stopPrank();
+	}
+
+	function testRedeemByPartitionShouldFailOnDefaultPartition() public {
+		bytes memory validationData = prepareRedemptionSignature(
+			TOKEN_REDEEMER_PK,
+			DEFAULT_PARTITION,
+			alice,
+			100e18,
+			10,
+			0
+		);
+
+		vm.startPrank(alice);
+		vm.expectRevert("ERC1400: Invalid data");
+		ERC1400MockToken.redeemByPartition(DEFAULT_PARTITION, 100e18, validationData);
+		vm.stopPrank();
+	}
+
+	///@dev test operator redemptions
 }
