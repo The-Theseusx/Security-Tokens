@@ -1168,10 +1168,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData);
 		require(_ownerOf(tokenId) == from, "ERC1400NFT: transfer not from token owner");
 
-		require(
-			_checkOnERC1400NFTReceived(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData),
-			"ERC1400NFT: transfer to non ERC1400Receiver implementer"
-		);
 		unchecked {
 			_balancesByPartition[from][DEFAULT_PARTITION] -= 1;
 			_balances[from] -= 1;
@@ -1185,6 +1181,11 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		emit Transfer(operator, from, to, tokenId, DEFAULT_PARTITION, data, operatorData);
 
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData);
+
+		require(
+			_checkOnERC1400NFTReceived(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData),
+			"ERC1400NFT: transfer to non ERC1400Receiver implementer"
+		);
 	}
 
 	/**
@@ -1251,10 +1252,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 
 		_beforeTokenTransfer(partition, operator, from, to, tokenId, data, operatorData);
 		require(_ownerOf(tokenId) == from, "ERC1400NFT: transfer not from token owner");
-		require(
-			_checkOnERC1400NFTReceived(partition, operator, from, to, tokenId, data, operatorData),
-			"ERC1400NFT: transfer to non ERC1400Receiver implementer"
-		);
 
 		_balancesByPartition[from][partition] -= 1;
 		_balances[from] -= 1;
@@ -1272,6 +1269,11 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		emit TransferByPartition(partition, operator, from, to, tokenId, data, operatorData);
 
 		_afterTokenTransfer(partition, operator, from, to, tokenId, data, operatorData);
+
+		require(
+			_checkOnERC1400NFTReceived(partition, operator, from, to, tokenId, data, operatorData),
+			"ERC1400NFT: transfer to non ERC1400Receiver implementer"
+		);
 	}
 
 	/**
@@ -1349,10 +1351,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		require(!exists(tokenId), "ERC1400NFT: Token already exists");
 
 		_beforeTokenTransfer(partition, operator, address(0), account, tokenId, data, "");
-		require(
-			_checkOnERC1400NFTReceived(partition, operator, address(0), account, tokenId, data, ""),
-			"ERC1400NFT: transfer to non ERC1400Receiver implementer"
-		);
 
 		_balances[account] += 1;
 		_balancesByPartition[account][partition] += 1;
@@ -1364,6 +1362,11 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		if (partition == DEFAULT_PARTITION) emit Issued(address(0), account, tokenId, data);
 		else emit IssuedByPartition(partition, account, tokenId, data);
 		_afterTokenTransfer(partition, operator, address(0), account, tokenId, data, "");
+
+		require(
+			_checkOnERC1400NFTReceived(partition, operator, address(0), account, tokenId, data, ""),
+			"ERC1400NFT: transfer to non ERC1400Receiver implementer"
+		);
 	}
 
 	/**
