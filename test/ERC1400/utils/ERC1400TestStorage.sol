@@ -4,6 +4,8 @@ pragma solidity ^0.8.0;
 import { Test } from "forge-std/Test.sol";
 import { ERC1400 } from "../../../src/ERC1400/ERC1400.sol";
 import { SigUtils } from "../../utils/SigUtils.sol";
+import { ERC1400ReceiverImplementer } from "./ERC1400ReceiverImplementer.sol";
+import { NonERC1400ReceiverImplementer } from "./NonERC1400ReceiverImplementer.sol";
 
 abstract contract ERC1400TestStorage is Test {
 	string public constant TOKEN_NAME = "ERC1400MockToken";
@@ -41,6 +43,11 @@ abstract contract ERC1400TestStorage is Test {
 	ERC1400 public ERC1400MockToken;
 
 	SigUtils public sigUtilsContract;
+
+	//solhint-disable-next-line var-name-mixedcase
+	ERC1400ReceiverImplementer public ERC1400ReceivableContract;
+
+	NonERC1400ReceiverImplementer public nonERC1400ReceivableContract;
 
 	// Issuance / Redemption Events
 	event Issued(address indexed operator, address indexed to, uint256 amount, bytes data);

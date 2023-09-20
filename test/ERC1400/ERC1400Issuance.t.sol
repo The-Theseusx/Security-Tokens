@@ -26,8 +26,47 @@ abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
 		vm.stopPrank();
 	}
 
+	function testShouldNotIssueTokensToNonERC1400ReceiverImplementer() public {
+		vm.startPrank(tokenIssuer);
+		vm.expectRevert("ERC1400: transfer to non ERC1400Receiver implementer");
+		ERC1400MockToken.issue(address(nonERC1400ReceivableContract), 1000e18, "");
+		vm.stopPrank();
+	}
+
+	function testShouldIssueTokensToERC1400ReceiverImplementer() public {
+		vm.startPrank(tokenIssuer);
+
+		vm.expectEmit(true, true, true, true);
+		emit Issued(tokenIssuer, address(ERC1400ReceivableContract), 1000e18, "");
+
+		ERC1400MockToken.issue(address(ERC1400ReceivableContract), 1000e18, "");
+
+		vm.stopPrank();
+
+		assertEq(
+			ERC1400MockToken.balanceOf(address(ERC1400ReceivableContract)),
+			1_000e18,
+			"The ERC1400ReceivableContract total balance should be 1_000e18"
+		);
+		assertEq(
+			ERC1400MockToken.totalSupply(),
+			INITIAL_SUPPLY + 1000e18,
+			"token total supply should be 100_001_00e18"
+		);
+		assertEq(
+			ERC1400MockToken.balanceOfByPartition(DEFAULT_PARTITION, address(ERC1400ReceivableContract)),
+			1000e18,
+			"The ERC1400ReceivableContract default partition balance should be 1_000e18"
+		);
+		assertEq(
+			ERC1400MockToken.totalSupplyByPartition(DEFAULT_PARTITION),
+			INITIAL_DEFAULT_PARTITION_SUPPLY + 1000e18,
+			"token default partition total supply should be 100_001_00e18"
+		);
+	}
+
 	function testIssueTokensByIssuer() public {
-		///@dev note, total token supply is 1 million. 98 million in the defaul partition and 2 miliion in shared space partition
+		///@dev note, initial token supply is 100 million. 98 million in the defaul partition and 2 miliion in shared space partition
 		vm.startPrank(tokenIssuer);
 
 		///@dev check the Issued event is emitted
@@ -35,6 +74,7 @@ abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
 		emit Issued(tokenIssuer, alice, 100e18, "");
 
 		ERC1400MockToken.issue(alice, 100e18, "");
+		vm.stopPrank();
 
 		assertEq(ERC1400MockToken.balanceOf(alice), 1_000_100e18, "Alice's total balance should be 1_000_100e18");
 		assertEq(
@@ -52,14 +92,62 @@ abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
 			INITIAL_DEFAULT_PARTITION_SUPPLY + 100e18,
 			"token default partition total supply should be 100_000_100e18"
 		);
-
-		vm.stopPrank();
 	}
 
 	function testIssueByPartitionFailWhenIssuingNotByIssuer() public {
 		string memory errMsg = accessControlError(address(this), ERC1400MockToken.ERC1400_ISSUER_ROLE());
 		vm.expectRevert(bytes(errMsg));
 		ERC1400MockToken.issueByPartition(SHARED_SPACES_PARTITION, bob, 150e18, "");
+	}
+
+	function testShouldNotIssueByPartitionToNonERC1400ReceiverImplementer() public {
+		vm.startPrank(tokenIssuer);
+		vm.expectRevert("ERC1400: transfer to non ERC1400Receiver implementer");
+		ERC1400MockToken.issueByPartition(SHARED_SPACES_PARTITION, address(nonERC1400ReceivableContract), 1000e18, "");
+		vm.stopPrank();
+	}
+
+	function testIssueByPartitionToERC1400ReceiverImplementer() public {
+		vm.startPrank(tokenIssuer);
+
+		vm.expectEmit(true, true, true, true);
+		emit IssuedByPartition(SHARED_SPACES_PARTITION, address(ERC1400ReceivableContract), 1000e18, "");
+
+		ERC1400MockToken.issueByPartition(SHARED_SPACES_PARTITION, address(ERC1400ReceivableContract), 1000e18, "");
+
+		vm.stopPrank();
+
+		assertEq(
+			ERC1400MockToken.balanceOf(address(ERC1400ReceivableContract)),
+			1_000e18,
+			"The ERC1400ReceivableContract total balance should be 1_000e18"
+		);
+		assertEq(
+			ERC1400MockToken.totalSupply(),
+			INITIAL_SUPPLY + 1000e18,
+			"token total supply should be 100_001_00e18"
+		);
+		assertEq(
+			ERC1400MockToken.balanceOfByPartition(DEFAULT_PARTITION, address(ERC1400ReceivableContract)),
+			0,
+			"The ERC1400ReceivableContract default partition balance should be 0"
+		);
+		assertEq(
+			ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, address(ERC1400ReceivableContract)),
+			1000e18,
+			"The ERC1400ReceivableContract shared shapces partition balance should be 1_000e18"
+		);
+		assertEq(
+			ERC1400MockToken.totalSupplyByPartition(SHARED_SPACES_PARTITION),
+			INITIAL_SHARED_SPACES_PARTITION_SUPPLY + 1000e18,
+			"token default partition total supply should be 100_001_00e18"
+		);
+
+		assertEq(
+			ERC1400MockToken.totalSupplyByPartition(DEFAULT_PARTITION),
+			INITIAL_DEFAULT_PARTITION_SUPPLY,
+			"token default partition total supply should be 2_000_150e18"
+		);
 	}
 
 	function testIssueTokenByPartitionByIssuer() public {
@@ -93,7 +181,7 @@ abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
 		);
 		assertEq(
 			ERC1400MockToken.totalSupplyByPartition(SHARED_SPACES_PARTITION),
-			2_000_150e18,
+			INITIAL_SHARED_SPACES_PARTITION_SUPPLY + 150e18,
 			"token default partition total supply should be 2_000_150e18"
 		);
 
