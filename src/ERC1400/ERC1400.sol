@@ -1172,10 +1172,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		/** @dev prevent zero token transfers (spam transfers) */
 		require(amount != 0, "ERC1400: zero amount");
 		_beforeTokenTransfer(partition, operator, from, to, amount, data, operatorData);
-		require(
-			_checkOnERC1400Received(partition, operator, from, to, amount, data, operatorData),
-			"ERC1400: transfer to non ERC1400Receiver implementer"
-		);
 
 		_balancesByPartition[from][partition] -= amount;
 		_balances[from] -= amount;
@@ -1191,6 +1187,11 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		emit TransferByPartition(partition, operator, from, to, amount, data, operatorData);
 
 		_afterTokenTransfer(partition, operator, from, to, amount, data, operatorData);
+
+		require(
+			_checkOnERC1400Received(partition, operator, from, to, amount, data, operatorData),
+			"ERC1400: transfer to non ERC1400Receiver implementer"
+		);
 	}
 
 	/**
@@ -1216,10 +1217,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		require(amount != 0, "ERC1400: zero amount");
 
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
-		require(
-			_checkOnERC1400Received(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData),
-			"ERC1400: transfer to non ERC1400Receiver implementer"
-		);
 
 		_balancesByPartition[from][DEFAULT_PARTITION] -= amount;
 		_balances[from] -= amount;
@@ -1229,6 +1226,11 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		emit Transfer(operator, from, to, amount, DEFAULT_PARTITION, data, operatorData);
 
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
+
+		require(
+			_checkOnERC1400Received(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData),
+			"ERC1400: transfer to non ERC1400Receiver implementer"
+		);
 	}
 
 	/**
@@ -1374,10 +1376,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		require(amount != 0, "ERC1400: zero amount");
 
 		_beforeTokenTransfer(partition, operator, address(0), account, amount, data, "");
-		require(
-			_checkOnERC1400Received(partition, operator, address(0), account, amount, data, ""),
-			"ERC1400: transfer to non ERC1400Receiver implementer"
-		);
 
 		_totalSupply += amount;
 		_totalSupplyByPartition[partition] += amount;
@@ -1389,6 +1387,11 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		if (partition == DEFAULT_PARTITION) emit Issued(operator, account, amount, data);
 		else emit IssuedByPartition(partition, account, amount, data);
 		_afterTokenTransfer(partition, operator, address(0), account, amount, data, "");
+
+		require(
+			_checkOnERC1400Received(partition, operator, address(0), account, amount, data, ""),
+			"ERC1400: transfer to non ERC1400Receiver implementer"
+		);
 	}
 
 	/**
