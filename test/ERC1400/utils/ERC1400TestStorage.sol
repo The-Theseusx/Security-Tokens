@@ -65,4 +65,14 @@ abstract contract ERC1400TestStorage is Test {
 	event Redeemed(address indexed operator, address indexed from, uint256 amount, bytes data);
 
 	event NonceSpent(bytes32 indexed role, address indexed spender, uint256 nonceSpent);
+
+	// Operator Events
+	event AuthorizedOperator(address indexed operator, address indexed tokenHolder);
+	event RevokedOperator(address indexed operator, address indexed tokenHolder);
+	event AuthorizedOperatorByPartition(
+		bytes32 indexed partition,
+		address indexed operator,
+		address indexed tokenHolder
+	);
+	event RevokedOperatorByPartition(bytes32 indexed partition, address indexed operator, address indexed tokenHolder);
 }
