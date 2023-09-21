@@ -1091,10 +1091,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		bytes memory operatorData
 	) public virtual override isValidPartition(partition) {
 		address operator = _msgSender();
-		require(
-			isOperator(operator, account) || isOperatorForPartition(partition, operator, account),
-			"ERC1400NFT: Not an operator"
-		);
 
 		ERC1400NFTValidateDataParams memory _data = ERC1400NFTValidateDataParams({
 			authorizerRole: ERC1400_NFT_REDEEMER_ROLE,

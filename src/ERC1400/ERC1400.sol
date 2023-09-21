@@ -1085,10 +1085,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory operatorData
 	) public virtual override isValidPartition(partition) {
 		address operator = _msgSender();
-		require(
-			isOperator(operator, account) || isOperatorForPartition(partition, operator, account),
-			"ERC1400: Not authorized operator"
-		);
+
 		ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
 			authorizerRole: ERC1400_REDEEMER_ROLE,
 			from: account,
