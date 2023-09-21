@@ -53,14 +53,14 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	///@dev token total suppply irrespective of partition.
 	uint256 private _totalSupply;
 
-	///@dev mapping of partition to total token supply of partition.
-	mapping(bytes32 => uint256) private _totalSupplyByPartition;
-
 	///@dev array of token partitions.
 	bytes32[] private _partitions;
 
 	///@dev array of token controllers.
 	address[] private _controllers;
+
+	///@dev mapping of partition to total token supply of partition.
+	mapping(bytes32 => uint256) private _totalSupplyByPartition;
 
 	///@dev mapping of partition to index in _partitions array.
 	mapping(bytes32 => uint256) private _partitionIndex;
