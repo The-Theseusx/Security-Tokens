@@ -951,6 +951,19 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		uint256 operatorCount = operators.length;
 		uint256 i;
 		uint256 j;
+
+		if (userPartitionCount == 0) {
+			for (; i < operatorCount; ) {
+				if (isOperator(operators[i], operator)) revokeOperator(operators[i]);
+				if (isOperatorForPartition(DEFAULT_PARTITION, operators[i], operator)) {
+					revokeOperatorByPartition(DEFAULT_PARTITION, operators[i]);
+				}
+				unchecked {
+					++i;
+				}
+			}
+		}
+
 		for (; i < userPartitionCount; ) {
 			for (; j < operatorCount; ) {
 				if (isOperatorForPartition(partitions[i], operators[j], operator)) {
@@ -960,7 +973,9 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 				if (isOperator(operators[j], operator)) {
 					revokeOperator(operators[j]);
 				}
-
+				if (isOperatorForPartition(DEFAULT_PARTITION, operators[j], operator)) {
+					revokeOperatorByPartition(DEFAULT_PARTITION, operators[j]);
+				}
 				unchecked {
 					++j;
 				}
