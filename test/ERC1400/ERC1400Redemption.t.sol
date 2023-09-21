@@ -292,5 +292,177 @@ abstract contract ERC1400RedemptionTest is ERC1400BaseTest, ERC1400SigUtils {
 		vm.stopPrank();
 	}
 
-	///@dev test operator redemptions
+	/************************************************************** operatorRedeemByPartition() **************************************************************/
+
+	function testOperatorRedeemByPartitionShouldFailWhenNotOperator() public {
+		bytes memory validationData = prepareRedemptionSignature(
+			TOKEN_REDEEMER_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			100e18,
+			0,
+			0
+		);
+
+		vm.startPrank(tokenAdminOperator);
+
+		vm.expectRevert("ERC1400: operator not authorized");
+		ERC1400MockToken.operatorRedeemByPartition(DEFAULT_PARTITION, tokenAdmin, 100e18, validationData, "");
+		vm.stopPrank();
+	}
+
+	function testOperatorRedeemByPartitionShouldFailWhenNotAuthorized() public {
+		vm.startPrank(tokenAdmin);
+		ERC1400MockToken.authorizeOperator(tokenAdminOperator);
+		vm.stopPrank();
+
+		///@dev @notice bad signer used
+		bytes memory validationData = prepareRedemptionSignature(999, DEFAULT_PARTITION, tokenAdmin, 100e18, 0, 0);
+
+		vm.startPrank(tokenAdminOperator);
+
+		vm.expectRevert("ERC1400: Invalid data");
+		ERC1400MockToken.operatorRedeemByPartition(DEFAULT_PARTITION, tokenAdmin, 100e18, validationData, "");
+		vm.stopPrank();
+	}
+
+	function testOperatorRedeemByPartitionShouldFailWhenNoDataPassedIn() public {
+		///@dev expect a revert when no data is passed in.
+		///@notice abi.decode in _validateData will fail in this case.
+		vm.startPrank(tokenAdmin);
+		ERC1400MockToken.authorizeOperator(tokenAdminOperator);
+		vm.stopPrank();
+
+		vm.startPrank(tokenAdminOperator);
+		vm.expectRevert();
+		ERC1400MockToken.operatorRedeemByPartition(DEFAULT_PARTITION, tokenAdmin, 100e18, "", "");
+		vm.stopPrank();
+	}
+
+	function testOperatorRedeemByPartitionShouldFailWhenSignatureDeadlinePasses() public {
+		vm.startPrank(tokenAdmin);
+		ERC1400MockToken.authorizeOperator(tokenAdminOperator);
+		vm.stopPrank();
+
+		///@dev warp block.timestamp by 1 hour
+		skip(1 hours);
+
+		///@dev @notice 1 second used as deadline
+		bytes memory validationData = prepareRedemptionSignature(
+			TOKEN_REDEEMER_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			100e18,
+			0,
+			1
+		);
+
+		vm.startPrank(tokenAdminOperator);
+		vm.expectRevert("ERC1400: Expired signature");
+		ERC1400MockToken.operatorRedeemByPartition(DEFAULT_PARTITION, tokenAdmin, 100e18, validationData, "");
+		vm.stopPrank();
+	}
+
+	function testOperatorRedeemByPartitionShouldFailWhenWrongNonceUsed() public {
+		vm.startPrank(tokenAdmin);
+		ERC1400MockToken.authorizeOperator(tokenAdminOperator);
+		vm.stopPrank();
+
+		///@dev @notice wrong nonce of 7 used, instead of 0
+		bytes memory validationData = prepareRedemptionSignature(
+			TOKEN_REDEEMER_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			100e18,
+			7,
+			0
+		);
+
+		vm.startPrank(tokenAdminOperator);
+		vm.expectRevert("ERC1400: Invalid data");
+		ERC1400MockToken.operatorRedeemByPartition(DEFAULT_PARTITION, tokenAdmin, 100e18, validationData, "");
+		vm.stopPrank();
+	}
+
+	function testOperatorRedeemByPartitionShouldFailWithInsufficientBalance() public {
+		vm.startPrank(notTokenAdmin);
+		ERC1400MockToken.authorizeOperator(tokenAdminOperator);
+		vm.stopPrank();
+
+		bytes memory validationData = prepareRedemptionSignature(
+			TOKEN_REDEEMER_PK,
+			DEFAULT_PARTITION,
+			notTokenAdmin,
+			100e18,
+			0,
+			0
+		);
+
+		///@dev @notice notTokenAdmin does not have any ERC1400 tokens
+		vm.startPrank(notTokenAdminOperator);
+		vm.expectRevert("ERC1400: Insufficient balance");
+		ERC1400MockToken.operatorRedeemByPartition(DEFAULT_PARTITION, notTokenAdmin, 100e18, validationData, "");
+		vm.stopPrank();
+	}
+
+	function testOperatorRedeemByPartitionShouldPassWhenAuthorized() public {
+		vm.startPrank(tokenAdmin);
+		ERC1400MockToken.authorizeOperator(tokenAdminOperator);
+		vm.stopPrank();
+
+		bytes memory validationData = prepareRedemptionSignature(
+			TOKEN_REDEEMER_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			100e18,
+			0,
+			0
+		);
+		uint256 tokenAdminBalancePrior = ERC1400MockToken.balanceOf(tokenAdmin);
+		uint256 tokenAdminDefaultPartitionBalancePrior = ERC1400MockToken.balanceOfByPartition(
+			DEFAULT_PARTITION,
+			tokenAdmin
+		);
+		uint256 tokenTotalSupplyPrior = ERC1400MockToken.totalSupply();
+		uint256 tokenDefaultPartitionTotalSupplyPrior = ERC1400MockToken.totalSupplyByPartition(DEFAULT_PARTITION);
+		uint256 redeemerRoleNoncePrior = ERC1400MockToken.getRoleNonce(ERC1400MockToken.ERC1400_REDEEMER_ROLE());
+
+		vm.startPrank(tokenAdminOperator);
+
+		///@dev asset the appropriate events are emitted
+		vm.expectEmit(true, true, true, true);
+		emit NonceSpent(ERC1400MockToken.ERC1400_REDEEMER_ROLE(), vm.addr(TOKEN_REDEEMER_PK), 0);
+
+		vm.expectEmit(true, true, true, true);
+		emit Redeemed(tokenAdminOperator, tokenAdmin, 100e18, validationData);
+		ERC1400MockToken.operatorRedeemByPartition(DEFAULT_PARTITION, tokenAdmin, 100e18, validationData, "");
+		vm.stopPrank();
+
+		assertEq(
+			ERC1400MockToken.balanceOf(tokenAdmin),
+			tokenAdminBalancePrior - 100e18,
+			"The user's balance should reduce by 100e18 tokens"
+		);
+		assertEq(
+			ERC1400MockToken.balanceOfByPartition(DEFAULT_PARTITION, tokenAdmin),
+			tokenAdminDefaultPartitionBalancePrior - 100e18,
+			"The user's default partition balance should reduce by 100e18 tokens"
+		);
+		assertEq(
+			ERC1400MockToken.totalSupply(),
+			tokenTotalSupplyPrior - 100e18,
+			"Token total supply should reduce by 100e18 tokens"
+		);
+		assertEq(
+			ERC1400MockToken.totalSupplyByPartition(DEFAULT_PARTITION),
+			tokenDefaultPartitionTotalSupplyPrior - 100e18,
+			"Token default partition supply should reduce by 100e18 tokens"
+		);
+		///@dev assert the role nonce has increased by one.
+		assertEq(
+			ERC1400MockToken.getRoleNonce(ERC1400MockToken.ERC1400_REDEEMER_ROLE()),
+			redeemerRoleNoncePrior + 1,
+			"Redemption role nonce should increase by 1"
+		);
+	}
 }
