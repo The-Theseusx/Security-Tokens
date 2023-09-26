@@ -25,6 +25,10 @@ abstract contract ERC1400TestStorage is Test {
 	uint256 public constant ALICE_OPERATOR_PK = 0xA11cE093A0;
 	uint256 public constant BOB_OPERATOR_PK = 0xB0b093A0;
 
+	uint256 public constant TOKEN_CONTROLLER_1_PK = 0x1034C04101;
+	uint256 public constant TOKEN_CONTROLLER_2_PK = 0x1034C04102;
+	uint256 public constant TOKEN_CONTROLLER_3_PK = 0x1034C04103;
+
 	address public constant ZERO_ADDRESS = address(0);
 
 	///@notice this is token total supply irrespective of partition
@@ -48,6 +52,10 @@ abstract contract ERC1400TestStorage is Test {
 	address public notTokenAdminOperator = vm.addr(NOT_TOKEN_ADMIN_OPERATOR_PK);
 	address public aliceOperator = vm.addr(ALICE_OPERATOR_PK);
 	address public bobOperator = vm.addr(BOB_OPERATOR_PK);
+
+	address public tokenController1 = vm.addr(TOKEN_CONTROLLER_1_PK);
+	address public tokenController2 = vm.addr(TOKEN_CONTROLLER_2_PK);
+	address public tokenController3 = vm.addr(TOKEN_CONTROLLER_3_PK);
 
 	//solhint-disable-next-line var-name-mixedcase
 	ERC1400 public ERC1400MockToken;
@@ -83,4 +91,6 @@ abstract contract ERC1400TestStorage is Test {
 		address indexed tokenHolder
 	);
 	event RevokedOperatorByPartition(bytes32 indexed partition, address indexed operator, address indexed tokenHolder);
+	event ControllerAdded(address indexed controller);
+	event ControllerRemoved(address indexed controller);
 }
