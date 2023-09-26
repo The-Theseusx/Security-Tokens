@@ -200,4 +200,126 @@ contract ERC1400Test is ERC1400IssuanceTest, ERC1400RedemptionTest {
 			"notTokenAdminOperator should not be an operator of the default partition for notTokenAdmin"
 		);
 	}
+
+	function testShouldNotAddControllersWhenNotAdmin() public {
+		string memory errMsg = accessControlError(notTokenAdmin, ERC1400MockToken.ERC1400_ADMIN_ROLE());
+
+		address[] memory controllers = new address[](3);
+		controllers[0] = tokenController1;
+		controllers[1] = tokenController2;
+		controllers[2] = tokenController3;
+
+		vm.startPrank(notTokenAdmin);
+		vm.expectRevert(bytes(errMsg));
+		ERC1400MockToken.addControllers(controllers);
+		vm.stopPrank();
+	}
+
+	function testShouldNotAddAddress0AsController() public {
+		address[] memory controllers = new address[](3);
+		controllers[0] = tokenController1;
+		controllers[1] = address(0);
+		controllers[2] = tokenController3;
+
+		vm.startPrank(tokenAdmin);
+		vm.expectRevert(bytes("ERC1400: controller is zero address"));
+		ERC1400MockToken.addControllers(controllers);
+		vm.stopPrank();
+	}
+
+	function testShouldAddControllers() public {
+		address[] memory controllers = new address[](3);
+		controllers[0] = tokenController1;
+		controllers[1] = tokenController2;
+		controllers[2] = tokenController3;
+
+		vm.startPrank(tokenAdmin);
+		for (uint256 i; i < controllers.length; ++i) {
+			vm.expectEmit(true, true, false, false);
+			emit ControllerAdded(controllers[i]);
+		}
+		ERC1400MockToken.addControllers(controllers);
+		vm.stopPrank();
+
+		assertTrue(ERC1400MockToken.isControllable(), "Token should be controllable");
+		assertTrue(ERC1400MockToken.isController(controllers[0]), "controller[0] should be a controller");
+		assertTrue(ERC1400MockToken.isController(controllers[1]), "controller[1] should be a controller");
+		assertTrue(ERC1400MockToken.isController(controllers[2]), "controller[2] should be a controller");
+	}
+
+	function testShouldNotRemoveControllersWhenNotAdmin() public {
+		string memory errMsg = accessControlError(notTokenAdmin, ERC1400MockToken.ERC1400_ADMIN_ROLE());
+
+		address[] memory controllers = new address[](3);
+		controllers[0] = tokenController1;
+		controllers[1] = tokenController2;
+		controllers[2] = tokenController3;
+
+		vm.startPrank(notTokenAdmin);
+		vm.expectRevert(bytes(errMsg));
+		ERC1400MockToken.removeControllers(controllers);
+		vm.stopPrank();
+	}
+
+	function testShouldNotRemoveControllerAddress0() public {
+		vm.startPrank(tokenAdmin);
+		_addControllers(); ///@dev adding controllers
+
+		address[] memory controllers = new address[](3);
+		controllers[0] = tokenController1;
+		controllers[1] = address(0);
+		controllers[2] = tokenController3;
+
+		vm.expectRevert(bytes("ERC1400: controller is zero address"));
+		ERC1400MockToken.removeControllers(controllers);
+		vm.stopPrank();
+	}
+
+	function testShouldNotRemoveNonControllers() public {
+		vm.startPrank(tokenAdmin);
+
+		_addControllers(); ///@dev adding controllers
+
+		address[] memory controllers = new address[](3);
+		controllers[0] = tokenController1;
+		controllers[1] = tokenController3;
+		controllers[2] = notTokenAdmin;
+
+		vm.expectRevert("ERC1400: not controller");
+		ERC1400MockToken.removeControllers(controllers);
+		vm.stopPrank();
+	}
+
+	function testShouldRemoveControllers() public {
+		vm.startPrank(tokenAdmin);
+
+		_addControllers(); ///@dev adding controllers
+		address[] memory controllers = new address[](2);
+		controllers[0] = tokenController2;
+		controllers[1] = tokenController3;
+
+		for (uint256 i; i < controllers.length; ++i) {
+			vm.expectEmit(true, true, false, false);
+			emit ControllerRemoved(controllers[i]);
+		}
+		ERC1400MockToken.removeControllers(controllers);
+		vm.stopPrank();
+
+		///@notice we did not remove tokenController1 as a controller at this point
+
+		assertTrue(ERC1400MockToken.isControllable(), "Token should be controllable");
+		assertTrue(ERC1400MockToken.isController(tokenController1), "tokenController1 should be a controller");
+		assertFalse(ERC1400MockToken.isController(controllers[0]), "tokenController2 should not be a controller");
+		assertFalse(ERC1400MockToken.isController(controllers[1]), "tokenController3 should not be a controller");
+
+		///@dev finally remove all controllers
+		address[] memory controllers_ = new address[](1);
+		controllers_[0] = tokenController1;
+		vm.startPrank(tokenAdmin);
+		ERC1400MockToken.removeControllers(controllers_);
+		vm.stopPrank();
+
+		assertFalse(ERC1400MockToken.isControllable(), "Token should not be controllable");
+		assertFalse(ERC1400MockToken.isController(tokenController1), "tokenController1 should not be a controller");
+	}
 }
