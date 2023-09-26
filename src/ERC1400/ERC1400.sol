@@ -935,7 +935,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		for (; i < controllersLength; ) {
 			require(controllers[i] != address(0), "ERC1400: controller is zero address");
 			require(
-				_controllerIndex[controllers[i]] == 0 && _controllers[0] != controllers[i],
+				_controllerIndex[controllers[i]] == 0 || _controllers.length == 0 || _controllers[0] != controllers[i],
 				"ERC1400: already controller"
 			);
 

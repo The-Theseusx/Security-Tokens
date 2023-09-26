@@ -892,7 +892,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		for (; i < controllersLength; ) {
 			require(controllers[i] != address(0), "ERC1400NFT: controller is zero address");
 			require(
-				_controllerIndex[controllers[i]] == 0 && _controllers[0] != controllers[i],
+				_controllerIndex[controllers[i]] == 0 || _controllers.length == 0 || _controllers[0] != controllers[i],
 				"ERC1400NFT: already controller"
 			);
 
