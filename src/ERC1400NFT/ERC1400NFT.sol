@@ -1452,8 +1452,10 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		delete _owners[tokenId];
 		delete _tokenApprovalsByPartition[tokenId][partition];
 
-		if (partition == DEFAULT_PARTITION) emit Redeemed(operator, account, tokenId, data);
-		else emit RedeemedByPartition(partition, operator, account, tokenId, data, operatorData);
+		if (!isController(operator)) {
+			if (partition == DEFAULT_PARTITION) emit Redeemed(operator, account, tokenId, data);
+			else emit RedeemedByPartition(partition, operator, account, tokenId, data, operatorData);
+		}
 		_afterTokenTransfer(partition, operator, account, address(0), tokenId, data, operatorData);
 	}
 

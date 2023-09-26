@@ -1478,8 +1478,10 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		_totalSupply -= amount;
 		_totalSupplyByPartition[partition] -= amount;
 
-		if (partition == DEFAULT_PARTITION) emit Redeemed(operator, account, amount, data);
-		else emit RedeemedByPartition(partition, operator, account, amount, data, operatorData);
+		if (!isController(operator)) {
+			if (partition == DEFAULT_PARTITION) emit Redeemed(operator, account, amount, data);
+			else emit RedeemedByPartition(partition, operator, account, amount, data, operatorData);
+		}
 		_afterTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
 	}
 
