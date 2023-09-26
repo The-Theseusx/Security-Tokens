@@ -40,11 +40,12 @@ abstract contract ERC1400BaseTest is Test, ERC1400TestStorage, ERC1400TestErrors
 		else ERC1400MockToken.issueByPartition(partition, to, amount, data);
 	}
 
-	// ///@dev start  necessary prank before calling this function
-	// function redeemTokens(bytes32 partition, address from, uint256 amount, bytes memory data) internal {
-	// 	if (from != address(0)) {
-	// 		if (partition == DEFAULT_PARTITION) ERC1400MockToken.redeem(amount, data);
-	// 		else ERC1400MockToken.redeemByPartition(partition, amount, data);
-	// 	} else ERC1400MockToken.redeemFrom(from, amount, data);
-	// }
+	function _addControllers() internal {
+		address[] memory controllers = new address[](3);
+		controllers[0] = tokenController1;
+		controllers[1] = tokenController2;
+		controllers[2] = tokenController3;
+
+		ERC1400MockToken.addControllers(controllers);
+	}
 }
