@@ -93,4 +93,19 @@ abstract contract ERC1400TestStorage is Test {
 	event RevokedOperatorByPartition(bytes32 indexed partition, address indexed operator, address indexed tokenHolder);
 	event ControllerAdded(address indexed controller);
 	event ControllerRemoved(address indexed controller);
+	event ControllerRedemption(
+		address indexed controller,
+		address indexed tokenHolder,
+		uint256 amount,
+		bytes data,
+		bytes operatorData
+	);
+	event ControllerRedemptionByPartition(
+		bytes32 indexed partition,
+		address indexed controller,
+		address indexed tokenHolder,
+		uint256 amount,
+		bytes data,
+		bytes operatorData
+	);
 }
