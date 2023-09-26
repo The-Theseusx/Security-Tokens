@@ -64,6 +64,51 @@ abstract contract ERC1400RedemptionTest is ERC1400BaseTest, ERC1400SigUtils {
 		vm.stopPrank();
 	}
 
+	function testRedeemShouldFailWhenNonceReused() public {
+		///@notice used nonce 0
+		bytes memory validationData = prepareRedemptionSignature(
+			TOKEN_REDEEMER_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			100e18,
+			0,
+			0
+		);
+
+		vm.startPrank(tokenAdmin);
+		ERC1400MockToken.redeem(100e18, validationData);
+		vm.stopPrank();
+
+		///@notice used nonce 1
+		bytes memory validationData2 = prepareRedemptionSignature(
+			TOKEN_REDEEMER_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			100e18,
+			0,
+			0
+		);
+
+		vm.startPrank(tokenAdmin);
+		ERC1400MockToken.redeem(100e18, validationData2);
+		vm.stopPrank();
+
+		///@dev reusing nonce 1
+		bytes memory validationData3 = prepareRedemptionSignature(
+			TOKEN_REDEEMER_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			100e18,
+			1,
+			0
+		);
+
+		vm.startPrank(tokenAdmin);
+		vm.expectRevert("ERC1400: Invalid data");
+		ERC1400MockToken.redeem(100e18, validationData3);
+		vm.stopPrank();
+	}
+
 	function testRedemptionShouldFailWithInsufficientBalance() public {
 		bytes memory validationData = prepareRedemptionSignature(
 			TOKEN_REDEEMER_PK,
@@ -463,6 +508,191 @@ abstract contract ERC1400RedemptionTest is ERC1400BaseTest, ERC1400SigUtils {
 			ERC1400MockToken.getRoleNonce(ERC1400MockToken.ERC1400_REDEEMER_ROLE()),
 			redeemerRoleNoncePrior + 1,
 			"Redemption role nonce should increase by 1"
+		);
+	}
+
+	function testOperatorRedeemByPartitionOfNonDefaultPartitionWhenAuthorized() public {
+		vm.startPrank(alice);
+		ERC1400MockToken.authorizeOperatorByPartition(SHARED_SPACES_PARTITION, aliceOperator);
+		vm.stopPrank();
+
+		bytes memory validationData = prepareRedemptionSignature(
+			TOKEN_REDEEMER_PK,
+			SHARED_SPACES_PARTITION,
+			alice,
+			100e18,
+			0,
+			0
+		);
+		uint256 aliceBalancePrior = ERC1400MockToken.balanceOf(alice);
+		uint256 aliceSharedSpacesPartitionBalancePrior = ERC1400MockToken.balanceOfByPartition(
+			SHARED_SPACES_PARTITION,
+			alice
+		);
+		uint256 tokenTotalSupplyPrior = ERC1400MockToken.totalSupply();
+		uint256 tokenSharedSpacesPartitionTotalSupplyPrior = ERC1400MockToken.totalSupplyByPartition(
+			SHARED_SPACES_PARTITION
+		);
+		uint256 redeemerRoleNoncePrior = ERC1400MockToken.getRoleNonce(ERC1400MockToken.ERC1400_REDEEMER_ROLE());
+
+		vm.startPrank(aliceOperator);
+
+		///@dev asset the appropriate events are emitted
+		vm.expectEmit(true, true, true, true);
+		emit NonceSpent(ERC1400MockToken.ERC1400_REDEEMER_ROLE(), vm.addr(TOKEN_REDEEMER_PK), 0);
+
+		vm.expectEmit(true, true, true, true);
+		emit RedeemedByPartition(SHARED_SPACES_PARTITION, aliceOperator, alice, 100e18, validationData, "");
+		ERC1400MockToken.operatorRedeemByPartition(SHARED_SPACES_PARTITION, alice, 100e18, validationData, "");
+		vm.stopPrank();
+
+		assertEq(
+			ERC1400MockToken.balanceOf(alice),
+			aliceBalancePrior - 100e18,
+			"Alice's balance should reduce by 100e18 tokens"
+		);
+		assertEq(
+			ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice),
+			aliceSharedSpacesPartitionBalancePrior - 100e18,
+			"Alice's shared spaces partition balance should reduce by 100e18 tokens"
+		);
+		assertEq(
+			ERC1400MockToken.totalSupply(),
+			tokenTotalSupplyPrior - 100e18,
+			"Token total supply should reduce by 100e18 tokens"
+		);
+		assertEq(
+			ERC1400MockToken.totalSupplyByPartition(SHARED_SPACES_PARTITION),
+			tokenSharedSpacesPartitionTotalSupplyPrior - 100e18,
+			"Token shared spaces partition supply should reduce by 100e18 tokens"
+		);
+		///@dev assert the role nonce has increased by one.
+		assertEq(
+			ERC1400MockToken.getRoleNonce(ERC1400MockToken.ERC1400_REDEEMER_ROLE()),
+			redeemerRoleNoncePrior + 1,
+			"Redemption role nonce should increase by 1"
+		);
+	}
+
+	function testControllerRedeemShouldFailWhenNotController() public {
+		vm.startPrank(notTokenAdmin);
+		vm.expectRevert("ERC1400: not a controller");
+		ERC1400MockToken.controllerRedeem(tokenAdmin, 100e18, "", "");
+		vm.stopPrank();
+	}
+
+	function testControllerRedeemShouldFailWhenUserHasNoTokens() public {
+		vm.startPrank(tokenAdmin);
+		_addControllers();
+		vm.stopPrank();
+
+		vm.startPrank(tokenController1);
+		vm.expectRevert("ERC1400: Insufficient balance");
+		ERC1400MockToken.controllerRedeem(notTokenAdmin, 100e18, "", "");
+		vm.stopPrank();
+	}
+
+	function testControllerRedeemShouldRedeemTokens() public {
+		vm.startPrank(tokenAdmin);
+		_addControllers();
+		vm.stopPrank();
+
+		uint256 tokenAdminBalancePrior = ERC1400MockToken.balanceOf(tokenAdmin);
+		uint256 tokenAdminDefaultPartitionBalancePrior = ERC1400MockToken.balanceOfByPartition(
+			DEFAULT_PARTITION,
+			tokenAdmin
+		);
+		uint256 tokenTotalSupplyPrior = ERC1400MockToken.totalSupply();
+		uint256 tokenDefaultPartitionTotalSupplyPrior = ERC1400MockToken.totalSupplyByPartition(DEFAULT_PARTITION);
+
+		vm.startPrank(tokenController1);
+		vm.expectEmit(true, true, true, true);
+		emit ControllerRedemption(tokenController1, tokenAdmin, 100e18, "", "");
+
+		ERC1400MockToken.controllerRedeem(tokenAdmin, 100e18, "", "");
+		vm.stopPrank();
+
+		assertEq(
+			ERC1400MockToken.balanceOf(tokenAdmin),
+			tokenAdminBalancePrior - 100e18,
+			"The user's balance should reduce by 100e18 tokens"
+		);
+		assertEq(
+			ERC1400MockToken.balanceOfByPartition(DEFAULT_PARTITION, tokenAdmin),
+			tokenAdminDefaultPartitionBalancePrior - 100e18,
+			"The user's default partition balance should reduce by 100e18 tokens"
+		);
+		assertEq(
+			ERC1400MockToken.totalSupply(),
+			tokenTotalSupplyPrior - 100e18,
+			"Token total supply should reduce by 100e18 tokens"
+		);
+		assertEq(
+			ERC1400MockToken.totalSupplyByPartition(DEFAULT_PARTITION),
+			tokenDefaultPartitionTotalSupplyPrior - 100e18,
+			"Token default partition supply should reduce by 100e18 tokens"
+		);
+	}
+
+	function testControllerRedeemByPartitionShouldFailWhenNotController() public {
+		vm.startPrank(notTokenAdmin);
+		vm.expectRevert("ERC1400: not a controller");
+		ERC1400MockToken.controllerRedeemByPartition(SHARED_SPACES_PARTITION, alice, 100e18, "", "");
+		vm.stopPrank();
+	}
+
+	function testControllerRedeemByPartitionShouldFailWhenUserHasNoTokens() public {
+		vm.startPrank(tokenAdmin);
+		_addControllers();
+		vm.stopPrank();
+
+		vm.startPrank(tokenController1);
+		vm.expectRevert("ERC1400: Insufficient balance");
+		ERC1400MockToken.controllerRedeemByPartition(SHARED_SPACES_PARTITION, notTokenAdmin, 100e18, "", "");
+		vm.stopPrank();
+	}
+
+	function testControllerRedeemByPartitionShouldRedeemTokens() public {
+		vm.startPrank(tokenAdmin);
+		_addControllers();
+		vm.stopPrank();
+
+		uint256 aliceBalancePrior = ERC1400MockToken.balanceOf(alice);
+		uint256 aliceSharedSpacesPartitionBalancePrior = ERC1400MockToken.balanceOfByPartition(
+			SHARED_SPACES_PARTITION,
+			alice
+		);
+		uint256 tokenTotalSupplyPrior = ERC1400MockToken.totalSupply();
+		uint256 tokenDefaultPartitionTotalSupplyPrior = ERC1400MockToken.totalSupplyByPartition(
+			SHARED_SPACES_PARTITION
+		);
+
+		vm.startPrank(tokenController1);
+		vm.expectEmit(true, true, true, true);
+		emit ControllerRedemptionByPartition(SHARED_SPACES_PARTITION, tokenController1, alice, 100e18, "", "");
+
+		ERC1400MockToken.controllerRedeemByPartition(SHARED_SPACES_PARTITION, alice, 100e18, "", "");
+		vm.stopPrank();
+
+		assertEq(
+			ERC1400MockToken.balanceOf(alice),
+			aliceBalancePrior - 100e18,
+			"Alice's balance should reduce by 100e18 tokens"
+		);
+		assertEq(
+			ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice),
+			aliceSharedSpacesPartitionBalancePrior - 100e18,
+			"Alice's shared spaces partition balance should reduce by 100e18 tokens"
+		);
+		assertEq(
+			ERC1400MockToken.totalSupply(),
+			tokenTotalSupplyPrior - 100e18,
+			"Token total supply should reduce by 100e18 tokens"
+		);
+		assertEq(
+			ERC1400MockToken.totalSupplyByPartition(SHARED_SPACES_PARTITION),
+			tokenDefaultPartitionTotalSupplyPrior - 100e18,
+			"Token shared spaces partition supply should reduce by 100e18 tokens"
 		);
 	}
 }
