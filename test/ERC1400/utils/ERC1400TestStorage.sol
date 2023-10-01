@@ -108,4 +108,5 @@ abstract contract ERC1400TestStorage is Test {
 		bytes data,
 		bytes operatorData
 	);
+	event Transfer(address indexed from, address indexed to, uint256 value);
 }
