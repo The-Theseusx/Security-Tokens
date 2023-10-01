@@ -107,16 +107,14 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	);
 	///@dev event emitted when issuance is disabled
 	event IssuanceDisabled();
-	event Transfer(
-		address operator,
-		address indexed from,
-		address indexed to,
-		uint256 amount,
+	event Transfer(address indexed from, address indexed to, uint256 value);
+	event Approval(address indexed owner, address indexed spender, uint256 value);
+	event ApprovalByPartition(
 		bytes32 indexed partition,
-		bytes data,
-		bytes operatorData
+		address indexed owner,
+		address indexed spender,
+		uint256 amount
 	);
-	event Approval(address indexed owner, address indexed spender, uint256 amount, bytes32 indexed partition);
 	event ControllerAdded(address indexed controller);
 	event ControllerRemoved(address indexed controller);
 	event ControllerTransferByPartition(
@@ -1179,6 +1177,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
+		_beforeTokenTransfer(partition, operator, from, to, amount, data, operatorData);
 		require(partition != DEFAULT_PARTITION, "ERC1400: Wrong partition (DEFAULT_PARTITION)");
 		require(_balancesByPartition[from][partition] >= amount, "ERC1400: transfer amount exceeds balance");
 		require(to != address(0), "ERC1400: transfer to the zero address");
@@ -1192,7 +1191,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		}
 		/** @dev prevent zero token transfers (spam transfers) */
 		require(amount != 0, "ERC1400: zero amount");
-		_beforeTokenTransfer(partition, operator, from, to, amount, data, operatorData);
 
 		_balancesByPartition[from][partition] -= amount;
 		_balances[from] -= amount;
@@ -1205,8 +1203,9 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		_balancesByPartition[to][partition] += amount;
 		_balances[to] += amount;
 
-		emit TransferByPartition(partition, operator, from, to, amount, data, operatorData);
-
+		if (!isController(operator)) {
+			emit TransferByPartition(partition, operator, from, to, amount, data, operatorData);
+		}
 		_afterTokenTransfer(partition, operator, from, to, amount, data, operatorData);
 
 		require(
@@ -1232,19 +1231,19 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
+		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 		require(_balancesByPartition[from][DEFAULT_PARTITION] >= amount, "ERC1400: transfer amount exceeds balance");
 		require(to != address(0), "ERC1400: transfer to the zero address");
 		/** @dev prevent zero token transfers (spam transfers) */
 		require(amount != 0, "ERC1400: zero amount");
-
-		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 
 		_balancesByPartition[from][DEFAULT_PARTITION] -= amount;
 		_balances[from] -= amount;
 
 		_balancesByPartition[to][DEFAULT_PARTITION] += amount;
 		_balances[to] += amount;
-		emit Transfer(operator, from, to, amount, DEFAULT_PARTITION, data, operatorData);
+
+		if (!isController(operator)) emit Transfer(from, to, amount);
 
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 
@@ -1340,7 +1339,8 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	 */
 	function _approveByPartition(bytes32 partition, address owner, address spender, uint256 amount) internal virtual {
 		_allowanceByPartition[owner][partition][spender] = amount;
-		emit Approval(owner, spender, amount, partition);
+		if (partition == DEFAULT_PARTITION) emit Approval(owner, spender, amount);
+		else emit ApprovalByPartition(partition, owner, spender, amount);
 	}
 
 	/**
