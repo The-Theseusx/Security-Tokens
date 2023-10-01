@@ -4,8 +4,9 @@ pragma solidity ^0.8.0;
 import { ERC1400 } from "../../src/ERC1400/ERC1400.sol";
 import { ERC1400IssuanceTest } from "./ERC1400Issuance.t.sol";
 import { ERC1400RedemptionTest } from "./ERC1400Redemption.t.sol";
+import { ERC1400TransferTest } from "./ERC1400Transfer.t.sol";
 
-contract ERC1400Test is ERC1400IssuanceTest, ERC1400RedemptionTest {
+contract ERC1400Test is ERC1400IssuanceTest, ERC1400RedemptionTest, ERC1400TransferTest {
 	function testItHasAName() public {
 		string memory name = ERC1400MockToken.name();
 		assertEq(name, TOKEN_NAME, "token name is not correct");
