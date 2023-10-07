@@ -1232,8 +1232,8 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory operatorData
 	) internal virtual {
 		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
-		require(_balancesByPartition[from][DEFAULT_PARTITION] >= amount, "ERC1400: transfer amount exceeds balance");
-		require(to != address(0), "ERC1400: transfer to the zero address");
+		require(_balancesByPartition[from][DEFAULT_PARTITION] >= amount, "ERC1400: insufficient balance");
+		require(to != address(0), "ERC1400: transfer to zero address");
 		/** @dev prevent zero token transfers (spam transfers) */
 		require(amount != 0, "ERC1400: zero amount");
 
