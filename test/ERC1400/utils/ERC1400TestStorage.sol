@@ -116,4 +116,13 @@ abstract contract ERC1400TestStorage is Test {
 		uint256 amount,
 		bytes data
 	);
+	event TransferByPartition(
+		bytes32 indexed fromPartition,
+		address operator,
+		address indexed from,
+		address indexed to,
+		uint256 amount,
+		bytes data,
+		bytes operatorData
+	);
 }
