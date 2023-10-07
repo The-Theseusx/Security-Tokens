@@ -3,9 +3,8 @@ pragma solidity ^0.8.0;
 
 import { console } from "forge-std/Test.sol";
 import { ERC1400BaseTest } from "./ERC1400BaseTest.t.sol";
-import { ERC1400SigUtils } from "./utils/ERC1400SigUtils.sol";
 
-abstract contract ERC1400RedemptionTest is ERC1400BaseTest, ERC1400SigUtils {
+abstract contract ERC1400RedemptionTest is ERC1400BaseTest {
 	/***************************************************************** redeem() *****************************************************************/
 	function testRedemptionShouldFailWhenNotAuthorized() public {
 		///@dev @notice bad signer used
