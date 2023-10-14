@@ -585,7 +585,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	 * @param data transfer data.
 	 * @param operatorData additional data attached by the operator (if any)
 	 * @notice since msg.sender is supposed to be an authorized operator,
-	   @param data and @param operatorData would be "" unless the operator wishes to send additional metadata.
+	   @param data and @param operatorData should be "" unless the operator wishes to send additional metadata.
 	 */
 	function operatorTransferByPartition(
 		bytes32 partition,
@@ -1179,8 +1179,8 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	) internal virtual {
 		_beforeTokenTransfer(partition, operator, from, to, amount, data, operatorData);
 		require(partition != DEFAULT_PARTITION, "ERC1400: Wrong partition (DEFAULT_PARTITION)");
-		require(_balancesByPartition[from][partition] >= amount, "ERC1400: transfer amount exceeds balance");
-		require(to != address(0), "ERC1400: transfer to the zero address");
+		require(_balancesByPartition[from][partition] >= amount, "ERC1400: insufficient balance");
+		require(to != address(0), "ERC1400: transfer to zero address");
 		if (operator != from) {
 			require(
 				isOperatorForPartition(partition, operator, from) ||
