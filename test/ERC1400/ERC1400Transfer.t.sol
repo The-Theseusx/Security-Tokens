@@ -164,7 +164,7 @@ abstract contract ERC1400TransferTest is ERC1400BaseTest {
 		vm.stopPrank();
 	}
 
-	function testShoulTransferWithData() public {
+	function testShouldTransferWithData() public {
 		bytes memory transferData = prepareTransferSignature(
 			TOKEN_TRANSFER_AGENT_PK,
 			DEFAULT_PARTITION,
@@ -196,6 +196,73 @@ abstract contract ERC1400TransferTest is ERC1400BaseTest {
 		);
 	}
 
+	function testTransferByPartitionShouldNotTransferWithInsufficientBalance() public {
+		///@notice notTokenAdmin has no tokens on shared spaces partition.
+		vm.startPrank(notTokenAdmin);
+		vm.expectRevert("ERC1400: insufficient balance");
+		ERC1400MockToken.transferByPartition(SHARED_SPACES_PARTITION, bob, 1000e18, "");
+		vm.stopPrank();
+	}
+
+	function testTransferByPartitionShouldNotTransferToZeroAddress() public {
+		vm.startPrank(alice);
+		vm.expectRevert("ERC1400: transfer to zero address");
+		ERC1400MockToken.transferByPartition(SHARED_SPACES_PARTITION, address(0), 1000e18, "");
+		vm.stopPrank();
+	}
+
+	function testTransferByPartitionShouldNotTransferZeroAmount() public {
+		vm.startPrank(alice);
+		vm.expectRevert("ERC1400: zero amount");
+		ERC1400MockToken.transferByPartition(SHARED_SPACES_PARTITION, bob, 0, "");
+		vm.stopPrank();
+	}
+
+	function testTransferByPartitionShouldNotTransferOnDefaultPartition() public {
+		vm.startPrank(alice);
+		vm.expectRevert("ERC1400: Wrong partition (DEFAULT_PARTITION)");
+		ERC1400MockToken.transferByPartition(DEFAULT_PARTITION, bob, 1000e18, "");
+		vm.stopPrank();
+	}
+
+	function testTransferByPartitionShouldNotTransferToNonERC1400ReceiverImplementerContract() public {
+		vm.startPrank(alice);
+		vm.expectRevert("ERC1400: transfer to non ERC1400Receiver implementer");
+		ERC1400MockToken.transferByPartition(
+			SHARED_SPACES_PARTITION,
+			address(nonERC1400ReceivableContract),
+			1000e18,
+			""
+		);
+		vm.stopPrank();
+	}
+
+	function testTransferByPartitionShouldTransferToERC1400ReceiverImplementerContract() public {
+		vm.startPrank(alice);
+		vm.expectEmit(true, true, true, true);
+		emit TransferByPartition(
+			SHARED_SPACES_PARTITION,
+			alice,
+			alice,
+			address(ERC1400ReceivableContract),
+			1000e18,
+			"",
+			""
+		);
+		ERC1400MockToken.transferByPartition(SHARED_SPACES_PARTITION, address(ERC1400ReceivableContract), 1000e18, "");
+		vm.stopPrank();
+	}
+
+	function testTransferByPartitionReturnsPartition() public {
+		vm.startPrank(alice);
+		vm.expectEmit(true, true, true, true);
+		emit TransferByPartition(SHARED_SPACES_PARTITION, alice, alice, bob, 1000e18, "", "");
+		bytes32 partition = ERC1400MockToken.transferByPartition(SHARED_SPACES_PARTITION, bob, 1000e18, "");
+		vm.stopPrank();
+
+		assertEq(partition, SHARED_SPACES_PARTITION, "Bob's shared spaces partition balance should be 1000e18");
+	}
+
 	function testShouldTransferByPartition() public {
 		uint256 aliceBalancePrior = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice);
 		uint256 bobBalancePrior = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, bob);
@@ -204,6 +271,36 @@ abstract contract ERC1400TransferTest is ERC1400BaseTest {
 		vm.expectEmit(true, true, true, true);
 		emit TransferByPartition(SHARED_SPACES_PARTITION, alice, alice, bob, 100e18, "", "");
 		ERC1400MockToken.transferByPartition(SHARED_SPACES_PARTITION, bob, 100e18, "");
+		vm.stopPrank();
+
+		uint256 aliceBalanceAfter = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice);
+		uint256 bobBalanceAfter = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, bob);
+
+		assertEq(
+			aliceBalanceAfter,
+			aliceBalancePrior - 100e18,
+			"Alice's shared spaces partition balance should reduce by 100e18"
+		);
+
+		assertEq(
+			bobBalanceAfter,
+			bobBalancePrior + 100e18,
+			"Bob's shared spaces partition balance should increase by 100e18"
+		);
+	}
+
+	function testOperatorTransferByPartition() public {
+		vm.startPrank(alice);
+		ERC1400MockToken.authorizeOperatorByPartition(SHARED_SPACES_PARTITION, aliceOperator);
+		vm.stopPrank();
+
+		uint256 aliceBalancePrior = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice);
+		uint256 bobBalancePrior = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, bob);
+
+		vm.startPrank(aliceOperator);
+		vm.expectEmit(true, true, true, true);
+		emit TransferByPartition(SHARED_SPACES_PARTITION, aliceOperator, alice, bob, 100e18, "", "");
+		ERC1400MockToken.operatorTransferByPartition(SHARED_SPACES_PARTITION, alice, bob, 100e18, "", "");
 		vm.stopPrank();
 
 		uint256 aliceBalanceAfter = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice);
