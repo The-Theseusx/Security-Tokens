@@ -125,4 +125,21 @@ abstract contract ERC1400TestStorage is Test {
 		bytes data,
 		bytes operatorData
 	);
+	event ControllerTransfer(
+		address indexed controller,
+		address indexed from,
+		address indexed to,
+		uint256 amount,
+		bytes data,
+		bytes operatorData
+	);
+	event ControllerTransferByPartition(
+		bytes32 indexed partition,
+		address indexed controller,
+		address indexed from,
+		address to,
+		uint256 amount,
+		bytes data,
+		bytes operatorData
+	);
 }
