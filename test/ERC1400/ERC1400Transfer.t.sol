@@ -575,7 +575,7 @@ abstract contract ERC1400TransferTest is ERC1400BaseTest {
 
 		vm.startPrank(bob);
 		vm.expectRevert("ERC1400: invalid data");
-		ERC1400MockToken.transferFromWithData(alice, tokenAdmin, 100e18, transferData);
+		ERC1400MockToken.transferFromWithData(tokenAdmin, alice, 100e18, transferData);
 		vm.stopPrank();
 	}
 }
