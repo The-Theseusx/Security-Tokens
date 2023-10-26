@@ -728,31 +728,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	}
 
 	/**
-	 * @notice increase the amount of tokens that an owner has approved for a spender to transfer from the default partition.
-	 * @param spender the address to approve
-	 * @param addedValue the amount to increase the approval by
-	 * @return true if successful
-	 */
-	function increaseAllowance(address spender, uint256 addedValue) public virtual returns (bool) {
-		address operator = _msgSender();
-		_approve(operator, spender, _allowanceByPartition[operator][DEFAULT_PARTITION][spender] + addedValue);
-		return true;
-	}
-
-	/**
-	 * @notice decrease the amount of tokens that an owner has approved for a spender to transfer from the default partition.
-	 * @param spender the address to approve
-	 * @param subtractedValue the amount to decrease the approval by
-	 * @return true if successful
-	 */
-	function decreaseAllowance(address spender, uint256 subtractedValue) public virtual returns (bool) {
-		address operator = _msgSender();
-
-		_approve(operator, spender, _allowanceByPartition[operator][DEFAULT_PARTITION][spender] - subtractedValue);
-		return true;
-	}
-
-	/**
 	 * @notice approve a spender to transfer tokens from any partition but the default one.
 	 * @param partition the partition to approve
 	 * @param spender the address to approve
@@ -766,54 +741,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	) public virtual isValidPartition(partition) returns (bool) {
 		require(partition != DEFAULT_PARTITION, "ERC1400: default partition");
 		_approveByPartition(partition, _msgSender(), spender, amount);
-		return true;
-	}
-
-	/**
-	 * @notice increase the amount of tokens that an owner has approved for a spender to transfer from any partition but the default one.
-	 * @param partition the partition to approve
-	 * @param spender the address to approve
-	 * @param addedValue the amount to increase the approval by
-	 * @return true if successful
-	 */
-	function increaseAllowanceByPartition(
-		bytes32 partition,
-		address spender,
-		uint256 addedValue
-	) public virtual isValidPartition(partition) returns (bool) {
-		require(partition != DEFAULT_PARTITION, "ERC1400: default partition");
-		address operator = _msgSender();
-
-		_approveByPartition(
-			partition,
-			operator,
-			spender,
-			_allowanceByPartition[operator][partition][spender] + addedValue
-		);
-		return true;
-	}
-
-	/**
-	 * @notice decrease the amount of tokens that an owner has approved for a spender to transfer from any partition but the default one.
-	 * @param partition the partition to approve
-	 * @param spender the address to approve
-	 * @param subtractedValue the amount to decrease the approval by
-	 * @return true if successful
-	 */
-	function decreaseAllowanceByPartition(
-		bytes32 partition,
-		address spender,
-		uint256 subtractedValue
-	) public virtual isValidPartition(partition) returns (bool) {
-		require(partition != DEFAULT_PARTITION, "ERC1400: default partition");
-		address operator = _msgSender();
-
-		_approveByPartition(
-			partition,
-			operator,
-			spender,
-			_allowanceByPartition[operator][partition][spender] - subtractedValue
-		);
 		return true;
 	}
 
