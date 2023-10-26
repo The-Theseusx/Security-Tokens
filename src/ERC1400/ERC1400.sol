@@ -100,6 +100,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	///@dev event emitted when tokens are transferred with data attached
 	event TransferWithData(
 		address indexed authorizer,
+		address operator,
 		address indexed from,
 		address indexed to,
 		uint256 amount,
@@ -671,7 +672,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	 * @param data transfer data to be validated.
 	 */
 	function transferFromWithData(address from, address to, uint256 amount, bytes memory data) public virtual override {
-		require(data.length != 0, "ERC1400: Invalid data");
+		require(data.length != 0, "ERC1400: invalid data");
 		_transferWithData(_msgSender(), from, to, amount, data, "");
 	}
 
@@ -1206,7 +1207,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		_spendNonce(ERC1400_TRANSFER_AGENT_ROLE, authorizer);
 
 		_transfer(operator, from, to, amount, data, operatorData);
-		emit TransferWithData(authorizer, operator, to, amount, data);
+		emit TransferWithData(authorizer, operator, from, to, amount, data);
 		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 	}
 
