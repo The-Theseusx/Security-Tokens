@@ -179,7 +179,7 @@ abstract contract ERC1400TransferTest is ERC1400BaseTest {
 
 		vm.startPrank(tokenAdmin);
 		vm.expectEmit(true, true, true, true);
-		emit TransferWithData(tokenTransferAgent, tokenAdmin, alice, 100e18, transferData);
+		emit TransferWithData(tokenTransferAgent, tokenAdmin, tokenAdmin, alice, 100e18, transferData);
 		ERC1400MockToken.transferWithData(alice, 100e18, transferData);
 		vm.stopPrank();
 
@@ -577,5 +577,127 @@ abstract contract ERC1400TransferTest is ERC1400BaseTest {
 		vm.expectRevert("ERC1400: invalid data");
 		ERC1400MockToken.transferFromWithData(tokenAdmin, alice, 100e18, transferData);
 		vm.stopPrank();
+	}
+
+	function testShouldNotTransferFromWithDataWhenNoData() public {
+		vm.startPrank(bob);
+		vm.expectRevert("ERC1400: invalid data");
+		ERC1400MockToken.transferFromWithData(tokenAdmin, alice, 100e18, "");
+		vm.stopPrank();
+	}
+
+	function testShouldNotTransferFromWithDataWhenWrongNonce() public {
+		///@notice wrong nonce used
+		bytes memory transferData = prepareTransferSignature(
+			TOKEN_TRANSFER_AGENT_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			bob,
+			100e18,
+			15,
+			0
+		);
+
+		vm.startPrank(bob);
+		vm.expectRevert("ERC1400: invalid data");
+		ERC1400MockToken.transferFromWithData(tokenAdmin, alice, 100e18, transferData);
+		vm.stopPrank();
+	}
+
+	function testShouldNotTransferFromWithDataWhenNonceReused() public {
+		bytes memory transferData = prepareTransferSignature(
+			TOKEN_TRANSFER_AGENT_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			bob,
+			100e18,
+			0,
+			0
+		);
+
+		vm.startPrank(bob);
+		ERC1400MockToken.transferFromWithData(tokenAdmin, bob, 100e18, transferData);
+		vm.stopPrank();
+
+		bytes memory transferData2 = prepareTransferSignature(
+			TOKEN_TRANSFER_AGENT_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			alice,
+			100e18,
+			0,
+			0
+		);
+
+		vm.startPrank(alice);
+		ERC1400MockToken.transferFromWithData(tokenAdmin, alice, 100e18, transferData2);
+		vm.stopPrank();
+
+		///@dev reusing nonce 1.
+		bytes memory transferData3 = prepareTransferSignature(
+			TOKEN_TRANSFER_AGENT_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			bob,
+			100e18,
+			1,
+			0
+		);
+
+		vm.startPrank(bob);
+		vm.expectRevert("ERC1400: invalid data");
+		ERC1400MockToken.transferFromWithData(tokenAdmin, bob, 100e18, transferData3);
+		vm.stopPrank();
+	}
+
+	function testShouldNotTransferFromWithDataWhenExpiredSignature() public {
+		skip(5 minutes);
+		///@notice expired signature used
+		bytes memory transferData = prepareTransferSignature(
+			TOKEN_TRANSFER_AGENT_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			alice,
+			100e18,
+			0,
+			100
+		);
+
+		vm.startPrank(alice);
+		vm.expectRevert("ERC1400: Expired signature");
+		ERC1400MockToken.transferFromWithData(tokenAdmin, alice, 100e18, transferData);
+		vm.stopPrank();
+	}
+
+	function testShouldTransferFromWithData() public {
+		bytes memory transferData = prepareTransferSignature(
+			TOKEN_TRANSFER_AGENT_PK,
+			DEFAULT_PARTITION,
+			tokenAdmin,
+			alice,
+			100e18,
+			0,
+			0
+		);
+
+		uint256 tokenAdminBalancePrior = ERC1400MockToken.balanceOfByPartition(DEFAULT_PARTITION, tokenAdmin);
+
+		vm.startPrank(alice);
+		vm.expectEmit(true, true, true, true);
+		emit TransferWithData(tokenTransferAgent, alice, tokenAdmin, alice, 100e18, transferData);
+		ERC1400MockToken.transferFromWithData(tokenAdmin, alice, 100e18, transferData);
+		vm.stopPrank();
+
+		assertEq(
+			ERC1400MockToken.balanceOfByPartition(DEFAULT_PARTITION, alice),
+			100e18,
+			"Alice's balance should be 100e18"
+		);
+
+		assertEq(
+			ERC1400MockToken.balanceOfByPartition(DEFAULT_PARTITION, tokenAdmin),
+			tokenAdminBalancePrior - 100e18,
+			"Admin's balance should reduce by 100e18"
+		);
 	}
 }

@@ -111,6 +111,7 @@ abstract contract ERC1400TestStorage is Test {
 	event Transfer(address indexed from, address indexed to, uint256 value);
 	event TransferWithData(
 		address indexed authorizer,
+		address operator,
 		address indexed from,
 		address indexed to,
 		uint256 amount,
