@@ -700,4 +700,40 @@ abstract contract ERC1400TransferTest is ERC1400BaseTest {
 			"Admin's balance should reduce by 100e18"
 		);
 	}
+
+	// function testTransferFromByPartition() public {
+	// 	bytes memory transferData = prepareTransferSignature(
+	// 		TOKEN_TRANSFER_AGENT_PK,
+	// 		SHARED_SPACES_PARTITION,
+	// 		alice,
+	// 		tokenAdmin,
+	// 		100e18,
+	// 		0,
+	// 		0
+	// 	);
+
+	// 	uint256 tokenAdminBalancePrior = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, tokenAdmin);
+	// 	uint256 aliceBalancePrior = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice);
+
+	// 	vm.startPrank(tokenAdmin);
+	// 	vm.expectEmit(true, true, true, true);
+	// 	emit TransferByPartition(SHARED_SPACES_PARTITION, tokenAdmin, alice, tokenAdmin, 100e18, transferData, "");
+	// 	ERC1400MockToken.transferFromByPartition(SHARED_SPACES_PARTITION, alice, tokenAdmin, 100e18, transferData);
+	// 	vm.stopPrank();
+
+	// 	uint256 tokenAdminBalanceAfter = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, tokenAdmin);
+	// 	uint256 aliceBalanceAfter = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice);
+
+	// 	assertEq(
+	// 		aliceBalanceAfter,
+	// 		aliceBalancePrior - 100e18,
+	// 		"Alice's shared spaces partition balance should reduce by 100e18"
+	// 	);
+
+	// 	assertEq(
+	// 		tokenAdminBalanceAfter,
+	// 		tokenAdminBalancePrior - 100e18,
+	// 		"TokenAdmin's shared spaces partition balance should reduce by 100e18"
+	// 	);
+	// }
 }
