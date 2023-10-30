@@ -12,6 +12,7 @@ import { IERC1400 } from "./IERC1400.sol";
 import { IERC1400Receiver } from "./IERC1400Receiver.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 
+///@dev review transfers involving the use of data as signatures
 contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	// --------------------------------------------------------------- CONSTANTS --------------------------------------------------------------- //
 
