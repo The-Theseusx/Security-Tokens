@@ -5,8 +5,16 @@ import { ERC1400 } from "../../src/ERC1400/ERC1400.sol";
 import { ERC1400IssuanceTest } from "./ERC1400Issuance.t.sol";
 import { ERC1400RedemptionTest } from "./ERC1400Redemption.t.sol";
 import { ERC1400TransferTest } from "./ERC1400Transfer.t.sol";
+import { ERC1400ApprovalTest } from "./ERC1400Approval.t.sol";
+import { ERC1400CanTransferTest } from "./ERC1400CanTransfer.t.sol";
 
-contract ERC1400Test is ERC1400IssuanceTest, ERC1400RedemptionTest, ERC1400TransferTest {
+contract ERC1400Test is
+	ERC1400IssuanceTest,
+	ERC1400RedemptionTest,
+	ERC1400TransferTest,
+	ERC1400ApprovalTest,
+	ERC1400CanTransferTest
+{
 	function testItHasAName() public {
 		string memory name = ERC1400MockToken.name();
 		assertEq(name, TOKEN_NAME, "token name is not correct");
@@ -216,7 +224,7 @@ contract ERC1400Test is ERC1400IssuanceTest, ERC1400RedemptionTest, ERC1400Trans
 		vm.stopPrank();
 	}
 
-	function testShouldNotAddAddress0AsController() public {
+	function testShouldNotAddAddressZeroAsController() public {
 		address[] memory controllers = new address[](3);
 		controllers[0] = tokenController1;
 		controllers[1] = address(0);
@@ -322,5 +330,48 @@ contract ERC1400Test is ERC1400IssuanceTest, ERC1400RedemptionTest, ERC1400Trans
 
 		assertFalse(ERC1400MockToken.isControllable(), "Token should not be controllable");
 		assertFalse(ERC1400MockToken.isController(tokenController1), "tokenController1 should not be a controller");
+	}
+
+	function testUserPartitionsUpdateProperly() public {
+		bytes32 newPartition1 = keccak256("newPartition1");
+		bytes32 newPartition2 = keccak256("newPartition2");
+
+		vm.startPrank(tokenIssuer);
+		_issueTokens(newPartition1, alice, 100e18, "");
+		_issueTokens(newPartition2, alice, 100e18, "");
+		_issueTokens(newPartition1, bob, 200e18, "");
+		vm.stopPrank();
+
+		///@dev alice should have 3 partitions (shared spaces, newPartition1, newPartition2)
+
+		bytes32[] memory alicePartitions = ERC1400MockToken.partitionsOf(alice);
+		assertEq(alicePartitions.length, 3, "alice should have 3 partitions");
+		assertEq(alicePartitions[0], SHARED_SPACES_PARTITION, "alice should have shared spaces partition");
+		assertEq(alicePartitions[1], newPartition1, "alice should have newPartition1");
+		assertEq(alicePartitions[2], newPartition2, "alice should have newPartition2");
+
+		assertTrue(
+			ERC1400MockToken.isUserPartition(SHARED_SPACES_PARTITION, alice),
+			"alice should have shared spaces partition"
+		);
+		assertTrue(ERC1400MockToken.isUserPartition(newPartition1, alice), "alice should have newPartition1 partition");
+		assertTrue(ERC1400MockToken.isUserPartition(newPartition2, alice), "alice should have newPartition2 partition");
+
+		///@dev bob should have 2 partitions (SHARED_SPACES_PARTITION, newPartition1)
+
+		bytes32[] memory bobPartitions = ERC1400MockToken.partitionsOf(bob);
+		assertEq(bobPartitions.length, 2, "bob should have 2 partitions");
+		assertEq(bobPartitions[0], SHARED_SPACES_PARTITION, "bob should have default partition");
+		assertEq(bobPartitions[1], newPartition1, "bob should have newPartition1");
+
+		assertTrue(
+			ERC1400MockToken.isUserPartition(SHARED_SPACES_PARTITION, bob),
+			"bob should have shared spaces partition"
+		);
+		assertTrue(ERC1400MockToken.isUserPartition(newPartition1, bob), "bob should have newPartition1 partition");
+		assertFalse(
+			ERC1400MockToken.isUserPartition(newPartition2, bob),
+			"bob should not have newPartition2 partition"
+		);
 	}
 }
