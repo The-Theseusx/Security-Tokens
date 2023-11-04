@@ -6,6 +6,7 @@
 		"not-rely-on-time": false,
 		"reason-string": false,
 		"max-states-count": false,
-		"no-unused-vars": "warn"
+		"no-unused-vars": "warn",
+		"no-console": false
 	}
 }
