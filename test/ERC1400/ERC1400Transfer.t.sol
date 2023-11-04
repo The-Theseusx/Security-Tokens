@@ -1,8 +1,6 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-// import { Test } from "forge-std/Test.sol";
-import { ERC1400 } from "../../src/ERC1400/ERC1400.sol";
 import { ERC1400BaseTest } from "./ERC1400BaseTest.t.sol";
 
 abstract contract ERC1400TransferTest is ERC1400BaseTest {
@@ -701,39 +699,115 @@ abstract contract ERC1400TransferTest is ERC1400BaseTest {
 		);
 	}
 
-	// function testTransferFromByPartition() public {
-	// 	bytes memory transferData = prepareTransferSignature(
-	// 		TOKEN_TRANSFER_AGENT_PK,
-	// 		SHARED_SPACES_PARTITION,
-	// 		alice,
-	// 		tokenAdmin,
-	// 		100e18,
-	// 		0,
-	// 		0
-	// 	);
+	function testTransferFromByPartitionWithData() public {
+		bytes memory transferData = prepareTransferSignature(
+			TOKEN_TRANSFER_AGENT_PK,
+			SHARED_SPACES_PARTITION,
+			alice,
+			tokenAdmin,
+			100e18,
+			0,
+			0
+		);
 
-	// 	uint256 tokenAdminBalancePrior = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, tokenAdmin);
-	// 	uint256 aliceBalancePrior = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice);
+		uint256 tokenAdminBalancePrior = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, tokenAdmin);
+		uint256 aliceBalancePrior = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice);
 
-	// 	vm.startPrank(tokenAdmin);
-	// 	vm.expectEmit(true, true, true, true);
-	// 	emit TransferByPartition(SHARED_SPACES_PARTITION, tokenAdmin, alice, tokenAdmin, 100e18, transferData, "");
-	// 	ERC1400MockToken.transferFromByPartition(SHARED_SPACES_PARTITION, alice, tokenAdmin, 100e18, transferData);
-	// 	vm.stopPrank();
+		vm.startPrank(tokenAdmin);
+		vm.expectEmit(true, true, true, true);
+		emit TransferByPartition(SHARED_SPACES_PARTITION, tokenAdmin, alice, tokenAdmin, 100e18, transferData, "");
+		ERC1400MockToken.transferFromByPartition(SHARED_SPACES_PARTITION, alice, tokenAdmin, 100e18, transferData);
+		vm.stopPrank();
 
-	// 	uint256 tokenAdminBalanceAfter = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, tokenAdmin);
-	// 	uint256 aliceBalanceAfter = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice);
+		uint256 tokenAdminBalanceAfter = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, tokenAdmin);
+		uint256 aliceBalanceAfter = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice);
 
-	// 	assertEq(
-	// 		aliceBalanceAfter,
-	// 		aliceBalancePrior - 100e18,
-	// 		"Alice's shared spaces partition balance should reduce by 100e18"
-	// 	);
+		assertEq(
+			aliceBalanceAfter,
+			aliceBalancePrior - 100e18,
+			"Alice's shared spaces partition balance should reduce by 100e18"
+		);
 
-	// 	assertEq(
-	// 		tokenAdminBalanceAfter,
-	// 		tokenAdminBalancePrior - 100e18,
-	// 		"TokenAdmin's shared spaces partition balance should reduce by 100e18"
-	// 	);
-	// }
+		assertEq(
+			tokenAdminBalanceAfter,
+			tokenAdminBalancePrior + 100e18,
+			"TokenAdmin's shared spaces partition balance should reduce by 100e18"
+		);
+	}
+
+	function testTransferFromByPartitionWithNoData() public {
+		vm.startPrank(alice);
+		ERC1400MockToken.approveByPartition(SHARED_SPACES_PARTITION, bob, 200e18);
+		vm.stopPrank();
+
+		uint256 aliceBalancePrior = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice);
+		uint256 bobBalancePrior = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, bob);
+
+		vm.startPrank(bob);
+		vm.expectEmit(true, true, true, true);
+		emit TransferByPartition(SHARED_SPACES_PARTITION, bob, alice, bob, 200e18, "", "");
+		ERC1400MockToken.transferFromByPartition(SHARED_SPACES_PARTITION, alice, bob, 200e18, "");
+		vm.stopPrank();
+
+		uint256 aliceBalanceAfter = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice);
+		uint256 bobBalanceAfter = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, bob);
+
+		assertEq(
+			aliceBalanceAfter,
+			aliceBalancePrior - 200e18,
+			"Alice's shared spaces partition balance should reduce by 200e18"
+		);
+
+		assertEq(
+			bobBalanceAfter,
+			bobBalancePrior + 200e18,
+			"Bob's shared spaces partition balance should increase by 200e18"
+		);
+	}
+
+	function testTransferFromByPartitionWithNoDataAndNoAmountShouldFail() public {
+		vm.startPrank(alice);
+		ERC1400MockToken.approveByPartition(SHARED_SPACES_PARTITION, bob, 200e18);
+		vm.stopPrank();
+
+		vm.startPrank(bob);
+		vm.expectRevert("ERC1400: zero amount");
+		ERC1400MockToken.transferFromByPartition(SHARED_SPACES_PARTITION, alice, bob, 0, "");
+		vm.stopPrank();
+	}
+
+	function testTransferFromByPartitionWithNoDataNoAllowanceShouldFail() public {
+		vm.startPrank(bob);
+		vm.expectRevert("ERC1400: insufficient partition allowance");
+		ERC1400MockToken.transferFromByPartition(SHARED_SPACES_PARTITION, alice, bob, 200e18, "");
+		vm.stopPrank();
+	}
+
+	function testTransferByPartitionWithNoDataToZeroAddressShouldFail() public {
+		vm.startPrank(alice);
+		ERC1400MockToken.approveByPartition(SHARED_SPACES_PARTITION, bob, 200e18);
+		vm.stopPrank();
+
+		vm.startPrank(bob);
+		vm.expectRevert("ERC1400: transfer to zero address");
+		ERC1400MockToken.transferFromByPartition(SHARED_SPACES_PARTITION, alice, address(0), 200e18, "");
+		vm.stopPrank();
+	}
+
+	function testTransferFromByPartitionWithDataAndNoAmountShouldFail() public {
+		bytes memory transferData = prepareTransferSignature(
+			TOKEN_TRANSFER_AGENT_PK,
+			SHARED_SPACES_PARTITION,
+			alice,
+			bob,
+			0,
+			0,
+			0
+		);
+
+		vm.startPrank(bob);
+		vm.expectRevert("ERC1400: zero amount");
+		ERC1400MockToken.transferFromByPartition(SHARED_SPACES_PARTITION, alice, bob, 0, transferData);
+		vm.stopPrank();
+	}
 }
