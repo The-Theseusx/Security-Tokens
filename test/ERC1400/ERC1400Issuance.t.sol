@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import { Test } from "forge-std/Test.sol";
-import { ERC1400 } from "../../src/ERC1400/ERC1400.sol";
 import { ERC1400BaseTest } from "./ERC1400BaseTest.t.sol";
 
 abstract contract ERC1400IssuanceTest is ERC1400BaseTest {

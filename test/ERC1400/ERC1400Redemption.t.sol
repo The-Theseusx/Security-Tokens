@@ -1,7 +1,6 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import { console } from "forge-std/Test.sol";
 import { ERC1400BaseTest } from "./ERC1400BaseTest.t.sol";
 
 abstract contract ERC1400RedemptionTest is ERC1400BaseTest {
