@@ -7,7 +7,6 @@ import { ERC1400TestStorage } from "./utils/ERC1400TestStorage.sol";
 import { ERC1400TestErrors } from "./utils/ERC1400TestErrors.sol";
 import { SigUtils } from "../utils/SigUtils.sol";
 import { ERC1400SigUtils } from "./utils/ERC1400SigUtils.sol";
-
 import { ERC1400ReceiverImplementer } from "./utils/ERC1400ReceiverImplementer.sol";
 import { NonERC1400ReceiverImplementer } from "./utils/NonERC1400ReceiverImplementer.sol";
 
@@ -36,7 +35,7 @@ abstract contract ERC1400BaseTest is Test, ERC1400TestStorage, ERC1400TestErrors
 		vm.stopPrank();
 	}
 
-	///@dev start neccesary prank before calling this function
+	///@dev start necessary prank before calling this function
 	function _issueTokens(bytes32 partition, address to, uint256 amount, bytes memory data) internal {
 		if (partition == DEFAULT_PARTITION) ERC1400MockToken.issue(to, amount, data);
 		else ERC1400MockToken.issueByPartition(partition, to, amount, data);
