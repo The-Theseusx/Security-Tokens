@@ -143,4 +143,11 @@ abstract contract ERC1400TestStorage is Test {
 		bytes data,
 		bytes operatorData
 	);
+	event Approval(address indexed owner, address indexed spender, uint256 value);
+	event ApprovalByPartition(
+		bytes32 indexed partition,
+		address indexed owner,
+		address indexed spender,
+		uint256 amount
+	);
 }
