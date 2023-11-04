@@ -12,6 +12,37 @@ abstract contract ERC1400TestStorage is Test {
 	string public constant TOKEN_SYMBOL = "ERC1400MTK";
 	string public constant TOKEN_VERSION = "1";
 
+	bytes public constant TRANSFER_FAILURE = "0x50";
+	bytes public constant TRANSFER_SUCCESS = "0x51";
+	bytes public constant INSUFFICIENT_BALANCE = "0x52";
+	bytes public constant INSUFFICIENT_ALLOWANCE = "0x53";
+	bytes public constant TRANSFERS_HALTED = "0x54";
+	bytes public constant FUNDS_LOCKED = "0x55";
+	bytes public constant INVALID_SENDER = "0x56";
+	bytes public constant INVALID_RECEIVER = "0x57";
+	bytes public constant INVALID_OPERATOR = "0x58";
+	bytes public constant INVALID_DATA_OR_TOKEN_INFO = "0x5f";
+	/**
+	 **code	description **
+	 * 0x50	transfer failure
+	 * 0x51	transfer success
+	 * 0x52	insufficient balance
+	 * 0x53	insufficient allowance
+	 * 0x54	transfers halted (contract paused)
+	 * 0x55	funds locked (lockup period)
+	 * 0x56	invalid sender
+	 * 0x57	invalid receiver
+	 * 0x58	invalid operator (transfer agent)
+	 * 0x59
+	 * 0x5a
+	 * 0x5b
+	 * 0x5a
+	 * 0x5b
+	 * 0x5c
+	 * 0x5d
+	 * 0x5e
+	 * 0x5f	token meta or info */
+
 	uint256 public constant TOKEN_ADMIN_PK = 0x100;
 	uint256 public constant NOT_ADMIN_PK = 0x419;
 	uint256 public constant TOKEN_ISSUER_PK = 0x200;
