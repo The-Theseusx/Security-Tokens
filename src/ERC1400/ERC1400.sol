@@ -464,7 +464,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 				return (false, bytes("0x53"), bytes32(0));
 			}
 		}
-		if (balanceOfNonPartitioned(operator) < amount) return (false, bytes("0x52"), bytes32(0));
+		if (balanceOfNonPartitioned(from) < amount) return (false, bytes("0x52"), bytes32(0));
 		if (data.length != 0) {
 			ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
 				authorizerRole: ERC1400_TRANSFER_AGENT_ROLE,
