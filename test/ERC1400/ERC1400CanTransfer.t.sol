@@ -51,4 +51,62 @@ abstract contract ERC1400CanTransferTest is ERC1400BaseTest {
 		assertTrue(can, "canTransfer should return true when to is a contract that implements ERC1400Receiver");
 		assertEq(reason, TRANSFER_SUCCESS, "canTransfer should return empty reason when all conditions are met");
 	}
+
+	function test_fuzz_canTransferFrom(address from, address to, uint256 amount, bytes memory data) public {
+		vm.assume(to.code.length == 0);
+		vm.assume(to > address(100));
+
+		if (amount > 100e18 && amount < 1_000_000e18 && from != address(0)) {
+			vm.startPrank(tokenAdmin);
+			ERC1400MockToken.transfer(from, amount);
+			vm.stopPrank();
+		}
+
+		if (uint160(from) > type(uint48).max && data.length <= 10) {
+			vm.startPrank(from);
+			ERC1400MockToken.approve(to, amount);
+			vm.stopPrank();
+		}
+
+		if (data.length > 0) {
+			data = prepareTransferSignature(TOKEN_TRANSFER_AGENT_PK, DEFAULT_PARTITION, from, to, amount, 0, 0);
+		}
+
+		vm.startPrank(to);
+		(bool can, bytes memory reason, ) = ERC1400MockToken.canTransferFrom(from, to, amount, data);
+		vm.stopPrank();
+
+		if (keccak256(reason) == keccak256(INVALID_SENDER)) {
+			assertFalse(can, "canTransferFrom should return false when from is address(0)");
+			assertTrue(from == address(0), "ERC1400: transferFrom from the zero address should fail");
+		} else if (keccak256(reason) == keccak256(INVALID_RECEIVER)) {
+			assertFalse(can, "canTransferFrom should return false when to is address(0)");
+			assertTrue(to == address(0), "ERC1400: transferFrom to the zero address should fail");
+		} else if (keccak256(reason) == keccak256(TRANSFER_FAILURE)) {
+			assertFalse(can, "canTransferFrom should return false when amount is 0");
+			assertTrue(amount == 0, "ERC1400: zero amount transfer should fail");
+		} else if (keccak256(reason) == keccak256(INSUFFICIENT_BALANCE)) {
+			assertFalse(can, "canTransferFrom should return false when amount is greater than balance");
+			assertTrue(
+				ERC1400MockToken.balanceOfNonPartitioned(from) < amount,
+				"ERC1400: insufficient balance transfer should fail"
+			);
+		} else if (keccak256(reason) == keccak256(INSUFFICIENT_ALLOWANCE)) {
+			assertFalse(can, "canTransferFrom should return false when amount is greater than balance");
+			assertTrue(
+				(amount > ERC1400MockToken.allowance(from, to)),
+				"ERC1400: insufficient allowance transfer should fail"
+			);
+		} else if (keccak256(reason) == keccak256(INVALID_DATA_OR_TOKEN_INFO)) {
+			assertFalse(can, "canTransferFrom should return false when amount is greater than balance");
+			assertTrue(data.length <= 10, "ERC1400: invalid data transfer should fail");
+		} else {
+			assertTrue(can, "canTransferFrom should return true when all conditions are met");
+			assertEq(
+				reason,
+				TRANSFER_SUCCESS,
+				"canTransferFrom should return empty reason when all conditions are met"
+			);
+		}
+	}
 }
