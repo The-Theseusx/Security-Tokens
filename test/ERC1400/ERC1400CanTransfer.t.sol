@@ -29,7 +29,7 @@ abstract contract ERC1400CanTransferTest is ERC1400BaseTest {
 
 		if (from != address(0) && partition == SHARED_SPACES_PARTITION) {
 			vm.startPrank(from);
-			ERC1400MockToken.approveByPartition(SHARED_SPACES_PARTITION, from, amount);
+			ERC1400MockToken.approveByPartition(SHARED_SPACES_PARTITION, to, amount);
 			vm.stopPrank();
 		}
 
@@ -75,6 +75,44 @@ abstract contract ERC1400CanTransferTest is ERC1400BaseTest {
 				"canTransferByPartition should return empty reason when all conditions are met"
 			);
 		}
+	}
+
+	function testCanTransferByPartitionContracts() public {
+		vm.startPrank(alice);
+		ERC1400MockToken.approveByPartition(SHARED_SPACES_PARTITION, address(ERC1400ReceivableContract), 1000e18);
+		ERC1400MockToken.approveByPartition(SHARED_SPACES_PARTITION, address(nonERC1400ReceivableContract), 1000e18);
+		vm.stopPrank();
+
+		vm.startPrank(address(nonERC1400ReceivableContract));
+		(bytes memory statusCode, , ) = ERC1400MockToken.canTransferByPartition(
+			alice,
+			address(nonERC1400ReceivableContract),
+			SHARED_SPACES_PARTITION,
+			1000e18,
+			""
+		);
+
+		assertEq(
+			keccak256(statusCode),
+			keccak256(INVALID_RECEIVER),
+			"ERC1400: canTransferByPartition to non ERC1400Receiver implementer should return invalid receiver"
+		);
+
+		vm.startPrank(address(ERC1400ReceivableContract));
+		(statusCode, , ) = ERC1400MockToken.canTransferByPartition(
+			alice,
+			address(ERC1400ReceivableContract),
+			SHARED_SPACES_PARTITION,
+			1000e18,
+			""
+		);
+		vm.stopPrank();
+
+		assertEq(
+			keccak256(statusCode),
+			keccak256(TRANSFER_SUCCESS),
+			"canTransferByPartition should return can transfer"
+		);
 	}
 
 	function test_fuzz_canTransfer(address to, uint256 amount, bytes memory data) public {
@@ -206,5 +244,69 @@ abstract contract ERC1400CanTransferTest is ERC1400BaseTest {
 
 		assertTrue(can, "canTransfer should return true when to is a contract that implements ERC1400Receiver");
 		assertEq(reason, TRANSFER_SUCCESS, "canTransfer should return empty reason when all conditions are met");
+	}
+
+	function test_fuzz_canTransfer(
+		bytes32 partition,
+		address from,
+		address to,
+		uint256 amount,
+		bool validateData,
+		bytes memory data
+	) public {
+		vm.assume(from.code.length == 0);
+		vm.assume(to.code.length == 0);
+
+		if (partition < SHARED_SPACES_PARTITION && partition != DEFAULT_PARTITION) {
+			partition = SHARED_SPACES_PARTITION;
+		}
+
+		if (amount > 100e18 && from != address(0)) {
+			if (partition == DEFAULT_PARTITION) {
+				amount = ERC1400MockToken.balanceOf(tokenAdmin);
+				vm.startPrank(tokenAdmin);
+				ERC1400MockToken.transfer(from, amount);
+				vm.stopPrank();
+			} else {
+				amount = ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, alice);
+				vm.startPrank(alice);
+				ERC1400MockToken.transferByPartition(SHARED_SPACES_PARTITION, from, amount, "");
+				vm.stopPrank();
+			}
+		}
+
+		if (from != address(0)) {
+			vm.startPrank(from);
+			partition == DEFAULT_PARTITION
+				? ERC1400MockToken.approve(to, amount)
+				: ERC1400MockToken.approveByPartition(SHARED_SPACES_PARTITION, to, amount);
+			vm.stopPrank();
+		}
+
+		if (data.length > 0) {
+			data = prepareTransferSignature(TOKEN_TRANSFER_AGENT_PK, partition, from, to, amount, 0, 0);
+		}
+
+		vm.startPrank(to);
+		(bool can, string memory reason) = ERC1400MockToken.canTransfer(
+			partition,
+			from,
+			to,
+			amount,
+			validateData,
+			data
+		);
+		// if (!can) {
+		// 	if (partition == DEFAULT_PARTITION) {
+		// 		if (from != address(0) && to != address(0)) {
+		// 			if (from != to) {}
+		// 		}
+		// 	}
+		// }
+
+		///@dev necessary to test this?? Remove canTransfer(partition, from, to, amount, validateData, data) altogether??
+
+		console2.log("can: ", can);
+		console2.log("reason: ", reason);
 	}
 }
