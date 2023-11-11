@@ -375,16 +375,17 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	) public view virtual override returns (bytes memory, bytes32, bytes32) {
 		uint256 index = _partitionIndex[partition];
 		address operator = _msgSender();
-		if (_partitions[index] != partition) return ("0x50", "ERC1400: IP", bytes32(0));
-		if (balanceOfByPartition(partition, from) < amount) return ("0x52", "ERC1400: IPB", bytes32(0));
+
 		if (from == address(0)) return ("0x56", "ERC1400: IS", bytes32(0));
 		if (to == address(0)) return ("0x57", "ERC1400: IR", bytes32(0));
+		if (_partitions.length == 0 || _partitions[index] != partition) return ("0x50", "ERC1400: IP", bytes32(0));
+		if (balanceOfByPartition(partition, from) < amount) return ("0x52", "ERC1400: IPB", bytes32(0));
 		if (to.code.length != 0) {
 			(bool can, ) = _canReceive(partition, operator, from, to, amount, data, "");
 			if (!can) return ("0x57", "ERC1400: IR", bytes32(0));
 		}
 		if (amount == 0) return ("0x50", "ERC1400: ITA", bytes32(0));
-		if (amount > allowance(from, operator)) {
+		if (amount > allowanceByPartition(partition, from, operator)) {
 			/** @dev possibly called by an operator or controller, check if the sender is an operator or controller */
 			if (
 				!isOperator(operator, from) ||
