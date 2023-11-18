@@ -181,7 +181,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		address tokenIssuer_,
 		address tokenRedeemer_,
 		address tokenTransferAgent_
-	) EIP712(name_, version_) ERC1643(tokenAdmin_) {
+	) EIP712(name_, version_) ERC1643(tokenAdmin_, ERC1400_NFT_ADMIN_ROLE) {
 		require(bytes(name_).length != 0, "ERC1400NFT: invalid name");
 		require(bytes(symbol_).length != 0, "ERC1400NFT: no symbol");
 		require(bytes(version_).length != 0, "ERC1400NFT: invalid version");

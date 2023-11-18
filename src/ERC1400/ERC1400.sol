@@ -176,7 +176,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		address tokenIssuer_,
 		address tokenRedeemer_,
 		address tokenTransferAgent_
-	) EIP712(name_, version_) ERC1643(tokenAdmin_) {
+	) EIP712(name_, version_) ERC1643(tokenAdmin_, ERC1400_ADMIN_ROLE) {
 		require(bytes(name_).length != 0, "ERC1400: name required");
 		require(bytes(symbol_).length != 0, "ERC1400: symbol required");
 		require(bytes(version_).length != 0, "ERC1400: version required");
