@@ -10,7 +10,7 @@ import { ERC1400SigUtils } from "./utils/ERC1400SigUtils.sol";
 import { ERC1400ReceiverImplementer } from "./utils/ERC1400ReceiverImplementer.sol";
 import { NonERC1400ReceiverImplementer } from "./utils/NonERC1400ReceiverImplementer.sol";
 
-abstract contract ERC1400BaseTest is Test, ERC1400TestStorage, ERC1400TestErrors, ERC1400SigUtils {
+abstract contract ERC1400BaseTest is ERC1400TestStorage, ERC1400TestErrors, ERC1400SigUtils {
 	function setUp() public {
 		ERC1400MockToken = new ERC1400(
 			TOKEN_NAME,
