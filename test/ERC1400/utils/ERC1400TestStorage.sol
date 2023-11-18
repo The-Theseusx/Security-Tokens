@@ -181,4 +181,6 @@ abstract contract ERC1400TestStorage is Test {
 		address indexed spender,
 		uint256 amount
 	);
+	event DocumentRemoved(bytes32 indexed name, string uri, bytes32 documentHash);
+	event DocumentUpdated(bytes32 indexed name, string uri, bytes32 documentHash);
 }
