@@ -50,9 +50,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	///@dev token symbol
 	string private _symbol;
 
-	///@dev token contract version for EIP712
-	string private _version;
-
 	///@dev base URI for computing {tokenURI}.
 	string private _baseUri;
 
@@ -196,7 +193,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		_name = name_;
 		_symbol = symbol_;
 		_baseUri = baseUri_;
-		_version = version_;
 		_isIssuable = true;
 
 		_grantRole(DEFAULT_ADMIN_ROLE, tokenAdmin_); ///@dev give default admin role to token admin
@@ -240,9 +236,8 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		return _symbol;
 	}
 
-	/// @return the contract version.
-	function version() public view virtual returns (string memory) {
-		return _version;
+	function domainSeparator() public view virtual returns (bytes32) {
+		return _domainSeparatorV4();
 	}
 
 	/// @return the total token balance of a user irrespective of partition.
