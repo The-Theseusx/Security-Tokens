@@ -248,8 +248,11 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		return 18;
 	}
 
-	/// @return the total number of tokens in existence, irrespective of partition.
+	function domainSeparator() public view virtual returns (bytes32) {
+		return _domainSeparatorV4();
+	}
 
+	/// @return the total number of tokens in existence, irrespective of partition.
 	function totalSupply() public view virtual override returns (uint256) {
 		return _totalSupply;
 	}
