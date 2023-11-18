@@ -10,14 +10,16 @@ import { IERC1643 } from "./IERC1643.sol";
  */
 
 abstract contract ERC1643 is IERC1643, AccessControl {
+	bytes32 public immutable adminRole;
 	struct Document {
 		bytes32 docHash; // Hash of the document
 		uint256 lastModified; // Timestamp at which document details was last modified
 		string uri; // URI of the document that exist off-chain
 	}
 
-	constructor(address admin) {
-		_grantRole(DEFAULT_ADMIN_ROLE, admin);
+	constructor(address admin, bytes32 authRole) {
+		_grantRole(authRole, admin);
+		adminRole = authRole;
 	}
 
 	/**
@@ -46,7 +48,7 @@ abstract contract ERC1643 is IERC1643, AccessControl {
 		bytes32 name,
 		string memory uri,
 		bytes32 documentHash
-	) public virtual override onlyRole(DEFAULT_ADMIN_ROLE) {
+	) public virtual override onlyRole(adminRole) {
 		require(name != bytes32(0), "ERC1643: name must not be empty");
 		require(bytes(uri).length > 0, "ERC1643: uri length must be > 0");
 
@@ -70,7 +72,7 @@ abstract contract ERC1643 is IERC1643, AccessControl {
 	 * @dev Removes document details for a given document name.
 	 * @param name Name of the document.
 	 */
-	function removeDocument(bytes32 name) public virtual override onlyRole(DEFAULT_ADMIN_ROLE) {
+	function removeDocument(bytes32 name) public virtual override onlyRole(adminRole) {
 		require(name != bytes32(0), "ERC1643: name must not be empty");
 
 		Document memory doc = documents[name];
