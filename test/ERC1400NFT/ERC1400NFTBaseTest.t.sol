@@ -29,6 +29,21 @@ abstract contract ERC1400NFTBaseTest is ERC1400NFTTestStorage, ERC1400NFTSigUtil
 		);
 		ERC1400NFTReceivableContract = new ERC1400NFTReceiverImplementer();
 		nonERC1400NFTReceivableContract = new NonERC1400NFTReceiverImplementer();
+
+		vm.startPrank(tokenIssuer);
+		_issueTokens(DEFAULT_PARTITION, tokenAdmin, ADMIN_INITIAL_TOKEN_ID, "");
+
+		///@dev issue to Alice and Bob 1_000_000e18 tokens each in the shared spaces partition
+		_issueTokens(SHARED_SPACES_PARTITION, alice, ALICE_INITIAL_TOKEN_ID, "");
+		_issueTokens(SHARED_SPACES_PARTITION, bob, BOB_INITIAL_TOKEN_ID, "");
+
+		vm.stopPrank();
+	}
+
+	///@dev start necessary prank before calling this function
+	function _issueTokens(bytes32 partition, address to, uint256 tokenId, bytes memory data) internal {
+		if (partition == DEFAULT_PARTITION) ERC1400NFTMockToken.issue(to, tokenId, data);
+		else ERC1400NFTMockToken.issueByPartition(partition, to, tokenId, data);
 	}
 
 	function _addControllers() internal {
