@@ -41,6 +41,10 @@ abstract contract ERC1400NFTTestStorage is Test {
 	uint256 public constant TOKEN_CONTROLLER_2_PK = 0x1034C04102;
 	uint256 public constant TOKEN_CONTROLLER_3_PK = 0x1034C04103;
 
+	uint256 public constant ADMIN_INITIAL_TOKEN_ID = 1;
+	uint256 public constant ALICE_INITIAL_TOKEN_ID = 2;
+	uint256 public constant BOB_INITIAL_TOKEN_ID = 3;
+
 	address public constant ZERO_ADDRESS = address(0);
 
 	bytes32 public constant DEFAULT_PARTITION = bytes32(0);
@@ -72,4 +76,55 @@ abstract contract ERC1400NFTTestStorage is Test {
 	ERC1400NFTReceiverImplementer public ERC1400NFTReceivableContract;
 
 	NonERC1400NFTReceiverImplementer public nonERC1400NFTReceivableContract;
+
+	event AuthorizedOperator(address indexed operator, address indexed tokenHolder);
+	event RevokedOperator(address indexed operator, address indexed tokenHolder);
+	event AuthorizedOperatorByPartition(
+		bytes32 indexed partition,
+		address indexed operator,
+		address indexed tokenHolder
+	);
+	event RevokedOperatorByPartition(bytes32 indexed partition, address indexed operator, address indexed tokenHolder);
+
+	// Issuance / Redemption Events
+	event Issued(address indexed operator, address indexed to, uint256 tokenId, bytes data);
+	event Redeemed(address indexed operator, address indexed from, uint256 tokenId, bytes data);
+	event IssuedByPartition(bytes32 indexed partition, address indexed to, uint256 tokenId, bytes data);
+	event RedeemedByPartition(
+		bytes32 indexed partition,
+		address indexed operator,
+		address indexed from,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
+
+	// Transfer Events
+	event TransferByPartition(
+		bytes32 indexed fromPartition,
+		address operator,
+		address indexed from,
+		address indexed to,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
+
+	// Controller Events
+	event ControllerTransfer(
+		address indexed controller,
+		address indexed from,
+		address indexed to,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
+
+	event ControllerRedemption(
+		address indexed controller,
+		address indexed tokenHolder,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
 }
