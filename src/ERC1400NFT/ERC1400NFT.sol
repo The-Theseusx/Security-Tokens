@@ -156,7 +156,8 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 
 	modifier isValidPartition(bytes32 partition) {
 		require(
-			_partitions[_partitionIndex[partition]] == partition || partition == DEFAULT_PARTITION,
+			partition == DEFAULT_PARTITION ||
+				(_partitions.length != 0 && _partitions[_partitionIndex[partition]] == partition),
 			"ERC1400NFT: nonexistent partition"
 		);
 		_;
