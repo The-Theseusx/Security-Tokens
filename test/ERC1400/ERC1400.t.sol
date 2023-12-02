@@ -7,13 +7,15 @@ import { ERC1400RedemptionTest } from "./ERC1400Redemption.t.sol";
 import { ERC1400TransferTest } from "./ERC1400Transfer.t.sol";
 import { ERC1400ApprovalTest } from "./ERC1400Approval.t.sol";
 import { ERC1400CanTransferTest } from "./ERC1400CanTransfer.t.sol";
+import { ERC1400DocumentTest } from "./ERC1400Document.t.sol";
 
 contract ERC1400Test is
 	ERC1400IssuanceTest,
 	ERC1400RedemptionTest,
 	ERC1400TransferTest,
 	ERC1400ApprovalTest,
-	ERC1400CanTransferTest
+	ERC1400CanTransferTest,
+	ERC1400DocumentTest
 {
 	function testItHasAName() public {
 		string memory name = ERC1400MockToken.name();
