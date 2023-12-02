@@ -127,4 +127,35 @@ abstract contract ERC1400NFTTestStorage is Test {
 		bytes data,
 		bytes operatorData
 	);
+	event ControllerAdded(address indexed controller);
+	event ControllerRemoved(address indexed controller);
+	event ControllerRedemptionByPartition(
+		bytes32 indexed partition,
+		address indexed controller,
+		address indexed tokenHolder,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
+	event Transfer(address indexed from, address indexed to, uint256 value);
+	event TransferWithData(
+		address indexed authorizer,
+		address operator,
+		address indexed from,
+		address indexed to,
+		uint256 tokenId,
+		bytes data
+	);
+	event ControllerTransferByPartition(
+		bytes32 indexed partition,
+		address indexed controller,
+		address indexed from,
+		address to,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
+	event Approval(address indexed owner, address indexed spender, uint256 tokenId, bytes32 indexed partition);
+	event DocumentRemoved(bytes32 indexed name, string uri, bytes32 documentHash);
+	event DocumentUpdated(bytes32 indexed name, string uri, bytes32 documentHash);
 }
