@@ -1375,8 +1375,8 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 
 		_addTokenToPartitionList(partition, account);
 
-		if (partition == DEFAULT_PARTITION) emit Issued(address(0), account, tokenId, data);
-		else emit IssuedByPartition(partition, account, tokenId, data);
+		if (partition == DEFAULT_PARTITION) emit Issued(operator, account, tokenId, data);
+		else emit IssuedByPartition(partition, operator, account, tokenId, data);
 		_afterTokenTransfer(partition, operator, address(0), account, tokenId, data, "");
 
 		require(
