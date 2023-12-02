@@ -2,8 +2,18 @@
 pragma solidity ^0.8.0;
 
 import { ERC1400NFTBaseTest } from "./ERC1400NFTBaseTest.t.sol";
+import { ERC1400NFTApprovalTest } from "./ERC1400NFTApproval.t.sol";
+import { ERC1400NFTIssuanceTest } from "./ERC1400NFTIssuance.t.sol";
+import { ERC1400NFTRedemptionTest } from "./ERC1400NFTRedemption.t.sol";
+import { ERC1400NFTDocumentTest } from "./ERC1400NFTDocument.t.sol";
 
-contract ERC1400NFTTest is ERC1400NFTBaseTest {
+contract ERC1400NFTTest is
+	ERC1400NFTBaseTest,
+	ERC1400NFTApprovalTest,
+	ERC1400NFTIssuanceTest,
+	ERC1400NFTRedemptionTest,
+	ERC1400NFTDocumentTest
+{
 	function testItHasAName() public {
 		string memory name = ERC1400NFTMockToken.name();
 		assertEq(name, TOKEN_NAME, "token name is not correct");
@@ -194,6 +204,177 @@ contract ERC1400NFTTest is ERC1400NFTBaseTest {
 		assertFalse(
 			ERC1400NFTMockToken.isOperatorForPartition(DEFAULT_PARTITION, notTokenAdminOperator, notTokenAdmin),
 			"notTokenAdminOperator should not be an operator of the default partition for notTokenAdmin"
+		);
+	}
+
+	function testShouldNotAddControllersWhenNotAdmin() public {
+		string memory errMsg = accessControlError(notTokenAdmin, ERC1400NFTMockToken.ERC1400_NFT_ADMIN_ROLE());
+
+		address[] memory controllers = new address[](3);
+		controllers[0] = tokenController1;
+		controllers[1] = tokenController2;
+		controllers[2] = tokenController3;
+
+		vm.startPrank(notTokenAdmin);
+		vm.expectRevert(bytes(errMsg));
+		ERC1400NFTMockToken.addControllers(controllers);
+		vm.stopPrank();
+	}
+
+	function testShouldNotAddAddressZeroAsController() public {
+		address[] memory controllers = new address[](3);
+		controllers[0] = tokenController1;
+		controllers[1] = address(0);
+		controllers[2] = tokenController3;
+
+		vm.startPrank(tokenAdmin);
+		vm.expectRevert("ERC1400NFT: controller is zero address");
+		ERC1400NFTMockToken.addControllers(controllers);
+		vm.stopPrank();
+	}
+
+	function testShouldAddControllers() public {
+		address[] memory controllers = new address[](3);
+		controllers[0] = tokenController1;
+		controllers[1] = tokenController2;
+		controllers[2] = tokenController3;
+
+		vm.startPrank(tokenAdmin);
+		for (uint256 i; i < controllers.length; ++i) {
+			vm.expectEmit(true, true, false, false);
+			emit ControllerAdded(controllers[i]);
+		}
+		ERC1400NFTMockToken.addControllers(controllers);
+		vm.stopPrank();
+
+		assertTrue(ERC1400NFTMockToken.isControllable(), "Token should be controllable");
+		assertTrue(ERC1400NFTMockToken.isController(controllers[0]), "controller[0] should be a controller");
+		assertTrue(ERC1400NFTMockToken.isController(controllers[1]), "controller[1] should be a controller");
+		assertTrue(ERC1400NFTMockToken.isController(controllers[2]), "controller[2] should be a controller");
+	}
+
+	function testShouldNotRemoveControllersWhenNotAdmin() public {
+		string memory errMsg = accessControlError(notTokenAdmin, ERC1400NFTMockToken.ERC1400_NFT_ADMIN_ROLE());
+
+		address[] memory controllers = new address[](3);
+		controllers[0] = tokenController1;
+		controllers[1] = tokenController2;
+		controllers[2] = tokenController3;
+
+		vm.startPrank(notTokenAdmin);
+		vm.expectRevert(bytes(errMsg));
+		ERC1400NFTMockToken.removeControllers(controllers);
+		vm.stopPrank();
+	}
+
+	function testShouldNotRemoveControllerAddress0() public {
+		vm.startPrank(tokenAdmin);
+		_addControllers(); ///@dev adding controllers
+
+		address[] memory controllers = new address[](3);
+		controllers[0] = tokenController1;
+		controllers[1] = address(0);
+		controllers[2] = tokenController3;
+
+		vm.expectRevert("ERC1400NFT: controller is zero address");
+		ERC1400NFTMockToken.removeControllers(controllers);
+		vm.stopPrank();
+	}
+
+	function testShouldNotRemoveNonControllers() public {
+		vm.startPrank(tokenAdmin);
+
+		_addControllers(); ///@dev adding controllers
+
+		address[] memory controllers = new address[](3);
+		controllers[0] = tokenController1;
+		controllers[1] = tokenController3;
+		controllers[2] = notTokenAdmin;
+
+		vm.expectRevert("ERC1400NFT: not controller");
+		ERC1400NFTMockToken.removeControllers(controllers);
+		vm.stopPrank();
+	}
+
+	function testShouldRemoveControllers() public {
+		vm.startPrank(tokenAdmin);
+
+		_addControllers(); ///@dev adding controllers
+		address[] memory controllers = new address[](2);
+		controllers[0] = tokenController2;
+		controllers[1] = tokenController3;
+
+		for (uint256 i; i < controllers.length; ++i) {
+			vm.expectEmit(true, true, false, false);
+			emit ControllerRemoved(controllers[i]);
+		}
+		ERC1400NFTMockToken.removeControllers(controllers);
+		vm.stopPrank();
+
+		///@notice we did not remove tokenController1 as a controller at this point
+
+		assertTrue(ERC1400NFTMockToken.isControllable(), "Token should be controllable");
+		assertTrue(ERC1400NFTMockToken.isController(tokenController1), "tokenController1 should be a controller");
+		assertFalse(ERC1400NFTMockToken.isController(controllers[0]), "tokenController2 should not be a controller");
+		assertFalse(ERC1400NFTMockToken.isController(controllers[1]), "tokenController3 should not be a controller");
+
+		///@dev finally remove all controllers
+		address[] memory controllers_ = new address[](1);
+		controllers_[0] = tokenController1;
+		vm.startPrank(tokenAdmin);
+		ERC1400NFTMockToken.removeControllers(controllers_);
+		vm.stopPrank();
+
+		assertFalse(ERC1400NFTMockToken.isControllable(), "Token should not be controllable");
+		assertFalse(ERC1400NFTMockToken.isController(tokenController1), "tokenController1 should not be a controller");
+	}
+
+	function testUserPartitionsUpdateProperly() public {
+		bytes32 newPartition1 = keccak256("newPartition1");
+		bytes32 newPartition2 = keccak256("newPartition2");
+
+		vm.startPrank(tokenIssuer);
+		_issueTokens(newPartition1, alice, 4, "");
+		_issueTokens(newPartition2, alice, 5, "");
+		_issueTokens(newPartition1, bob, 6, "");
+		vm.stopPrank();
+
+		///@dev alice should have 3 partitions (shared spaces, newPartition1, newPartition2)
+
+		bytes32[] memory alicePartitions = ERC1400NFTMockToken.partitionsOf(alice);
+		assertEq(alicePartitions.length, 3, "alice should have 3 partitions");
+		assertEq(alicePartitions[0], SHARED_SPACES_PARTITION, "alice should have shared spaces partition");
+		assertEq(alicePartitions[1], newPartition1, "alice should have newPartition1");
+		assertEq(alicePartitions[2], newPartition2, "alice should have newPartition2");
+
+		assertTrue(
+			ERC1400NFTMockToken.isUserPartition(SHARED_SPACES_PARTITION, alice),
+			"alice should have shared spaces partition"
+		);
+		assertTrue(
+			ERC1400NFTMockToken.isUserPartition(newPartition1, alice),
+			"alice should have newPartition1 partition"
+		);
+		assertTrue(
+			ERC1400NFTMockToken.isUserPartition(newPartition2, alice),
+			"alice should have newPartition2 partition"
+		);
+
+		///@dev bob should have 2 partitions (SHARED_SPACES_PARTITION, newPartition1)
+
+		bytes32[] memory bobPartitions = ERC1400NFTMockToken.partitionsOf(bob);
+		assertEq(bobPartitions.length, 2, "bob should have 2 partitions");
+		assertEq(bobPartitions[0], SHARED_SPACES_PARTITION, "bob should have default partition");
+		assertEq(bobPartitions[1], newPartition1, "bob should have newPartition1");
+
+		assertTrue(
+			ERC1400NFTMockToken.isUserPartition(SHARED_SPACES_PARTITION, bob),
+			"bob should have shared spaces partition"
+		);
+		assertTrue(ERC1400NFTMockToken.isUserPartition(newPartition1, bob), "bob should have newPartition1 partition");
+		assertFalse(
+			ERC1400NFTMockToken.isUserPartition(newPartition2, bob),
+			"bob should not have newPartition2 partition"
 		);
 	}
 }
