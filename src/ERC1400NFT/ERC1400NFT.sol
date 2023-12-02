@@ -1430,7 +1430,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		bytes memory operatorData
 	) internal virtual {
 		_beforeTokenTransfer(partition, operator, account, address(0), tokenId, data, operatorData);
-		require(_balancesByPartition[account][partition] >= tokenId, "ERC1400NFT: Not enough balance");
+		require(_owners[tokenId] == account, "ERC1400NFT: Not token owner");
 		if (operator != account) {
 			require(
 				isOperatorForPartition(partition, operator, account) ||
@@ -1459,7 +1459,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		ERC1400NFTValidateDataParams memory validateDataParams
 	) internal view virtual returns (bool, address) {
 		(bytes memory signature, uint48 deadline) = abi.decode(validateDataParams.data, (bytes, uint48));
-		require(deadline >= block.timestamp, "ERC1400: Expired signature");
+		require(deadline >= block.timestamp, "ERC1400NFT: Expired signature");
 
 		bytes32 structData = keccak256(
 			abi.encode(
