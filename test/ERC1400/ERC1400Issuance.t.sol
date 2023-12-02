@@ -78,7 +78,7 @@ abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
 	}
 
 	function testIssueTokensByIssuer() public {
-		///@dev note, initial token supply is 100 million. 98 million in the defaul partition and 2 miliion in shared space partition
+		///@dev note, initial token supply is 100 million. 98 million in the default partition and 2 million in shared space partition
 		vm.startPrank(tokenIssuer);
 
 		///@dev check the Issued event is emitted
@@ -160,7 +160,7 @@ abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
 		assertEq(
 			ERC1400MockToken.balanceOfByPartition(SHARED_SPACES_PARTITION, address(ERC1400ReceivableContract)),
 			1000e18,
-			"The ERC1400ReceivableContract shared shapces partition balance should be 1_000e18"
+			"The ERC1400ReceivableContract shared spaces partition balance should be 1_000e18"
 		);
 		assertEq(
 			ERC1400MockToken.totalSupplyByPartition(SHARED_SPACES_PARTITION),
@@ -217,7 +217,7 @@ abstract contract ERC1400IssuanceTest is ERC1400BaseTest {
 			"Bob's first partition should be keccack256(SHARED_SPACES_PARTITION)"
 		);
 
-		assertEq(ERC1400MockToken.totalPartitions(), 1, "Token should have a total of 1 paritions");
+		assertEq(ERC1400MockToken.totalPartitions(), 1, "Token should have a total of 1 partitions");
 
 		vm.stopPrank();
 	}
