@@ -376,7 +376,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	function getApproved(uint256 tokenId) public view virtual returns (address) {
 		require(exists(tokenId), "ERC1400NFT: nonexistent token");
 
-		return _tokenApprovalsByPartition[tokenId][DEFAULT_PARTITION];
+		return _tokenApprovalsByPartition[tokenId][partitionOfToken(tokenId)];
 	}
 
 	/**
@@ -761,7 +761,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 
 	/**
 	 * @notice for controllers to transfer tokens of a given partition but the default partition.
-	 * @param partition the  partition @param tokenId is asscoiated with.
+	 * @param partition the  partition @param tokenId is associated with.
 	 * @param from the address to transfer from
 	 * @param to the address to transfer to
 	 * @param tokenId the tokenId to transfer
@@ -1063,7 +1063,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 
 	/**
 	 * @notice allows users to redeem token. Redemptions should be approved by the issuer.
-	 * @param partition the token partition to reddem from, this could be the defaul partition.
+	 * @param partition the token partition to redeem from, this could be the default partition.
 	 * @param tokenId the tokenId to redeem.
 	 * @param data additional data attached to the transfer.
 	 */
@@ -1288,7 +1288,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 
 		require(
 			_checkOnERC1400NFTReceived(partition, operator, from, to, tokenId, data, operatorData),
-			"ERC1400NFT: transfer to non ERC1400Receiver implementer"
+			"ERC1400NFT: transfer to non ERC1400NFTReceiver implementer"
 		);
 	}
 
@@ -1381,7 +1381,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 
 		require(
 			_checkOnERC1400NFTReceived(partition, operator, address(0), account, tokenId, data, ""),
-			"ERC1400NFT: transfer to non ERC1400Receiver implementer"
+			"ERC1400NFT: transfer to non ERC1400NFTReceiver implementer"
 		);
 	}
 
@@ -1455,15 +1455,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		_afterTokenTransfer(partition, operator, account, address(0), tokenId, data, operatorData);
 	}
 
-	// /**
-	//  * @notice validate the data provided by the user when performing transactions that require validated data (signatures)
-	//  * @param authorizerRole the role the recovered signer MUST supposed to have
-	//  * @param from the address sending tokens
-	//  * @param to the address receiving tokens
-	//  * @param tokenId the tokenId of tokens to be sent
-	//  * @param partition the partition from which the tokens are sent
-	//  * @param signature the signature provided by the authorizer (data field in parent function)
-	//  */
 	function _validateData(
 		ERC1400NFTValidateDataParams memory validateDataParams
 	) internal view virtual returns (bool, address) {
@@ -1501,9 +1492,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		emit NonceSpent(role, spender, nonce - 1);
 	}
 
-	/**
-	 * @dev intenal function to disable issuance of tokens
-	 */
+	/// @dev internal function to disable issuance of tokens
 	function _disableIssuance() internal virtual {
 		_isIssuable = false;
 		emit IssuanceDisabled();
