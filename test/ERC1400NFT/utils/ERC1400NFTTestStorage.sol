@@ -89,7 +89,13 @@ abstract contract ERC1400NFTTestStorage is Test {
 	// Issuance / Redemption Events
 	event Issued(address indexed operator, address indexed to, uint256 tokenId, bytes data);
 	event Redeemed(address indexed operator, address indexed from, uint256 tokenId, bytes data);
-	event IssuedByPartition(bytes32 indexed partition, address indexed to, uint256 tokenId, bytes data);
+	event IssuedByPartition(
+		bytes32 indexed partition,
+		address indexed operator,
+		address indexed to,
+		uint256 tokenId,
+		bytes data
+	);
 	event RedeemedByPartition(
 		bytes32 indexed partition,
 		address indexed operator,
