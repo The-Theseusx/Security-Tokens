@@ -79,29 +79,6 @@ contract ERC1400Pausable is ERC1400, Pausable {
 		return (allowed, errCode, errReason);
 	}
 
-	function canTransfer(
-		bytes32 partition,
-		address from,
-		address to,
-		uint256 amount,
-		bool validateData,
-		bytes memory data
-	) public view virtual override returns (bool, string memory) {
-		(bool allowed, string memory errReason) = super.canTransfer(partition, from, to, amount, validateData, data);
-
-		if (allowed) {
-			(bool _allowed, bytes memory _errCode, bytes32 _errReason) = _checkPaused(partition, from, to);
-
-			if (!_allowed) {
-				if (keccak256(abi.encodePacked(_errReason)) == keccak256("ERC1400: TP")) errReason = "Token paused";
-				if (keccak256(abi.encodePacked(_errReason)) == keccak256("ERC1400: AP")) errReason = "Account paused";
-				if (keccak256(abi.encodePacked(_errReason)) == keccak256("ERC1400: PP")) errReason = "Partition paused";
-				if (keccak256(_errCode) == keccak256("0x57")) errReason = "Receiver paused";
-			}
-		}
-		return (allowed, errReason);
-	}
-
 	function _checkPaused(
 		bytes32 partition,
 		address from,
@@ -130,18 +107,5 @@ contract ERC1400Pausable is ERC1400, Pausable {
 			errCode = "0x54";
 			errReason = "ERC1400: PP";
 		}
-	}
-
-	function _beforeTokenTransfer(
-		bytes32 partition,
-		address,
-		address from,
-		address to,
-		uint256,
-		bytes memory,
-		bytes memory
-	) internal virtual override {
-		_requireNotPaused(from, partition);
-		_requireNotPaused(to, partition);
 	}
 }
