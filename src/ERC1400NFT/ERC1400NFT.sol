@@ -1430,6 +1430,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		bytes memory operatorData
 	) internal virtual {
 		_beforeTokenTransfer(partition, operator, account, address(0), tokenId, data, operatorData);
+		require(exists(tokenId), "ERC1400NFT: Token does not exist");
 		require(_owners[tokenId] == account, "ERC1400NFT: Not token owner");
 		if (operator != account) {
 			require(
@@ -1440,7 +1441,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 				"ERC1400NFT: transfer operator is not authorized"
 			);
 		}
-		require(exists(tokenId), "ERC1400NFT: Token does not exist");
 
 		_balances[account] -= 1;
 		_balancesByPartition[account][partition] -= 1;
