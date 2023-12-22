@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import { AccessControl } from "openzeppelin-contracts/contracts/access/AccessControl.sol";
-import { Pausable } from "openzeppelin-contracts/contracts/security/Pausable.sol";
 import { Context } from "openzeppelin-contracts/contracts/utils/Context.sol";
 import { ERC1643 } from "../ERC1643/ERC1643.sol";
 import { ERC1400ValidateDataParams } from "../utils/DataTypes.sol";
@@ -264,11 +263,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		return _totalSupplyByPartition[partition];
 	}
 
-	/// @return the total number of tokens issued from the default partition.
-	function totalSupplyOfNonPartitioned() public view virtual returns (uint256) {
-		return _totalSupplyByPartition[DEFAULT_PARTITION];
-	}
-
 	/// @return the total number of partitions of this token excluding the default partition.
 	function totalPartitions() public view virtual returns (uint256) {
 		return _partitions.length;
@@ -285,11 +279,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		address account
 	) public view virtual override isValidPartition(partition) returns (uint256) {
 		return _balancesByPartition[account][partition];
-	}
-
-	/// @return the total token balance of a user for the default partition.
-	function balanceOfNonPartitioned(address account) public view virtual returns (uint256) {
-		return _balancesByPartition[account][DEFAULT_PARTITION];
 	}
 
 	/// @return the allowance of a spender on the default partition.
@@ -428,7 +417,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		address operator = _msgSender();
 		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
 		if (amount == 0) return (false, bytes("0x50"), bytes32(0));
-		if (balanceOfNonPartitioned(operator) < amount) return (false, bytes("0x52"), bytes32(0));
+		if (balanceOfByPartition(DEFAULT_PARTITION, operator) < amount) return (false, bytes("0x52"), bytes32(0));
 		if (to.code.length > 0) {
 			(bool can, ) = _canReceive(DEFAULT_PARTITION, operator, operator, to, amount, data, "");
 			if (!can) return (false, bytes("0x57"), bytes32(0));
@@ -452,10 +441,9 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	) public view virtual override returns (bool, bytes memory, bytes32) {
 		address operator = _msgSender();
 		if (from == address(0)) return (false, bytes("0x56"), bytes32(0));
-		if (to == address(0)) return (false, bytes("0x57"), bytes32(0));
-		if (to.code.length > 0) {
+		if (to.code.length > 0 || to == address(0)) {
 			(bool can, ) = _canReceive(DEFAULT_PARTITION, operator, from, to, amount, data, "");
-			if (!can) return (false, bytes("0x57"), bytes32(0));
+			if (!can || to == address(0)) return (false, bytes("0x57"), bytes32(0));
 		}
 		if (amount == 0) return (false, bytes("0x50"), bytes32(0));
 		if (amount > allowance(from, operator)) {
@@ -468,7 +456,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 				return (false, bytes("0x53"), bytes32(0));
 			}
 		}
-		if (balanceOfNonPartitioned(from) < amount) return (false, bytes("0x52"), bytes32(0));
+		if (balanceOfByPartition(DEFAULT_PARTITION, from) < amount) return (false, bytes("0x52"), bytes32(0));
 		if (data.length != 0) {
 			ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
 				authorizerRole: ERC1400_TRANSFER_AGENT_ROLE,
@@ -484,60 +472,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		return (true, bytes("0x51"), bytes32(0));
 	}
 
-	/**
-	 * @notice considering the different return data formats of 
-	 * IERC1594 canTransfer, IERC1594 canTransferFrom and IERC1410 canTransferByPartition, 
-	 * this method tries to combine all into one canTransfer function.
-	 
-	 * @param partition the partition to execute the transfer on.
-	 * @param from the address to transfer from
-	 * @param to the address to transfer to
-	 * @param amount the amount of tokens to transfer
-	 * @param data transfer data.
-	 * @param validateData if true, will validate the data as a signature authorizing the transfer.
-	 * @param data the data to validate as a signature authorizing the transfer or extra metadata to go with the transfer.
-	 * @return bool if the transfer is possible with no error message else false with the error message.
-	 */
-	function canTransfer(
-		bytes32 partition,
-		address from,
-		address to,
-		uint256 amount,
-		bool validateData,
-		bytes memory data
-	) public view virtual returns (bool, string memory) {
-		bytes memory message;
-
-		if (partition == DEFAULT_PARTITION) {
-			if (from == to) {
-				(bool can, bytes memory returnedMessage, ) = canTransfer(to, amount, data);
-				if (can) return (true, "");
-				message = returnedMessage;
-			} else {
-				(bool can, bytes memory returnedMessage, ) = canTransferFrom(from, to, amount, data);
-				if (can) return (true, "");
-				message = returnedMessage;
-			}
-		} else {
-			(bytes memory returnedMessage, , ) = canTransferByPartition(from, to, partition, amount, data);
-			if (keccak256(returnedMessage) == keccak256("0x51")) return (true, "");
-			message = returnedMessage;
-		}
-
-		if (keccak256(message) == keccak256("0x50")) {
-			return (false, "ERC1400: Invalid amount, partition or transfer failure");
-		}
-		if (keccak256(message) == keccak256("0x52")) return (false, "ERC1400: Insufficient balance");
-		if (keccak256(message) == keccak256("0x53")) return (false, "ERC1400: insufficient allowance");
-		if (keccak256(message) == keccak256("0x56")) return (false, "ERC1400: Invalid sender");
-		if (keccak256(message) == keccak256("0x57")) return (false, "ERC1400: Cannot receive");
-		if (keccak256(message) == keccak256("0x5f")) {
-			return validateData ? (false, "ERC1400: Invalid transfer data") : (true, "");
-		}
-
-		return (false, "ERC1400: Failed with unknown error");
-	}
-
 	// --------------------------------------------------------------- TRANSFERS --------------------------------------------------------------- //
 
 	/**
@@ -547,8 +481,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	 * @return true if successful
 	 */
 	function transfer(address to, uint256 amount) public virtual returns (bool) {
-		address operator = _msgSender();
-		_transfer(operator, operator, to, amount, "", "");
+		_transfer(_msgSender(), _msgSender(), to, amount, "", "");
 		return true;
 	}
 
@@ -560,8 +493,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	 */
 	function transferWithData(address to, uint256 amount, bytes memory data) public virtual override {
 		require(data.length != 0, "ERC1400: Invalid data");
-		address operator = _msgSender();
-		_transferWithData(operator, operator, to, amount, data, "");
+		_transferWithData(_msgSender(), _msgSender(), to, amount, data, "");
 	}
 
 	/**
@@ -578,8 +510,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		uint256 amount,
 		bytes memory data
 	) public virtual override isValidPartition(partition) returns (bytes32) {
-		address operator = _msgSender();
-		_transferByPartition(partition, operator, operator, to, amount, false, data, "");
+		_transferByPartition(partition, _msgSender(), _msgSender(), to, amount, false, data, "");
 		return partition;
 	}
 
@@ -601,13 +532,11 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual override isValidPartition(partition) returns (bytes32) {
-		address operator = _msgSender();
-
 		require(
-			isOperator(operator, from) || isOperatorForPartition(partition, operator, from),
+			isOperator(_msgSender(), from) || isOperatorForPartition(partition, _msgSender(), from),
 			"ERC1400: Not authorized operator"
 		);
-		_transferByPartition(partition, operator, from, to, amount, false, data, operatorData);
+		_transferByPartition(partition, _msgSender(), from, to, amount, false, data, operatorData);
 		return partition;
 	}
 
@@ -649,10 +578,9 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual onlyController isValidPartition(partition) {
-		address operator = _msgSender();
-		_transferByPartition(partition, operator, from, to, amount, false, data, operatorData);
+		_transferByPartition(partition, _msgSender(), from, to, amount, false, data, operatorData);
 
-		emit ControllerTransferByPartition(partition, operator, from, to, amount, data, operatorData);
+		emit ControllerTransferByPartition(partition, _msgSender(), from, to, amount, data, operatorData);
 	}
 
 	/**
@@ -663,9 +591,8 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	 * @return true if successful
 	 */
 	function transferFrom(address from, address to, uint256 amount) public virtual returns (bool) {
-		address operator = _msgSender();
-		_spendAllowance(from, operator, amount);
-		_transfer(operator, from, to, amount, "", "");
+		_spendAllowanceByPartition(DEFAULT_PARTITION, from, _msgSender(), amount);
+		_transfer(_msgSender(), from, to, amount, "", "");
 		return true;
 	}
 
@@ -729,7 +656,8 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	 * @return true if successful
 	 */
 	function approve(address spender, uint256 amount) public virtual returns (bool) {
-		_approve(_msgSender(), spender, amount);
+		_approveByPartition(DEFAULT_PARTITION, _msgSender(), spender, amount);
+
 		return true;
 	}
 
@@ -745,7 +673,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		address spender,
 		uint256 amount
 	) public virtual isValidPartition(partition) returns (bool) {
-		require(partition != DEFAULT_PARTITION, "ERC1400: default partition");
 		_approveByPartition(partition, _msgSender(), spender, amount);
 		return true;
 	}
@@ -756,10 +683,9 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	 * @param operator address to authorize as operator for caller.
 	 */
 	function authorizeOperator(address operator) public virtual override {
-		address initiator = _msgSender();
-		require(operator != initiator, "ERC1400: self authorization not allowed");
-		_approvedOperator[initiator][operator] = true;
-		emit AuthorizedOperator(operator, initiator);
+		require(operator != _msgSender(), "ERC1400: self authorization not allowed");
+		_approvedOperator[_msgSender()][operator] = true;
+		emit AuthorizedOperator(operator, _msgSender());
 	}
 
 	/**
@@ -773,10 +699,9 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes32 partition,
 		address operator
 	) public virtual override isValidPartition(partition) {
-		address initiator = _msgSender();
-		require(operator != initiator, "ERC1400: self authorization not allowed");
-		_approvedOperatorByPartition[initiator][partition][operator] = true;
-		emit AuthorizedOperatorByPartition(partition, operator, initiator);
+		require(operator != _msgSender(), "ERC1400: self authorization not allowed");
+		_approvedOperatorByPartition[_msgSender()][partition][operator] = true;
+		emit AuthorizedOperatorByPartition(partition, operator, _msgSender());
 	}
 
 	/**
@@ -815,6 +740,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	function revokeOperators(address[] memory operators) public virtual {
 		address operator = _msgSender();
 
+		bytes32 defaultPartition = DEFAULT_PARTITION;
 		bytes32[] memory partitions = partitionsOf(operator);
 		uint256 userPartitionCount = partitions.length;
 		uint256 operatorCount = operators.length;
@@ -824,8 +750,8 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		if (userPartitionCount == 0) {
 			for (; i < operatorCount; ) {
 				if (isOperator(operators[i], operator)) revokeOperator(operators[i]);
-				if (isOperatorForPartition(DEFAULT_PARTITION, operators[i], operator)) {
-					revokeOperatorByPartition(DEFAULT_PARTITION, operators[i]);
+				if (isOperatorForPartition(defaultPartition, operators[i], operator)) {
+					revokeOperatorByPartition(defaultPartition, operators[i]);
 				}
 				unchecked {
 					++i;
@@ -842,8 +768,8 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 				if (isOperator(operators[j], operator)) {
 					revokeOperator(operators[j]);
 				}
-				if (isOperatorForPartition(DEFAULT_PARTITION, operators[j], operator)) {
-					revokeOperatorByPartition(DEFAULT_PARTITION, operators[j]);
+				if (isOperatorForPartition(defaultPartition, operators[j], operator)) {
+					revokeOperatorByPartition(defaultPartition, operators[j]);
 				}
 				unchecked {
 					++j;
@@ -916,7 +842,8 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	 * @dev disables issuance of tokens, can only be called by the owner
 	 */
 	function disableIssuance() public virtual onlyRole(ERC1400_ADMIN_ROLE) {
-		_disableIssuance();
+		_isIssuable = false;
+		emit IssuanceDisabled();
 	}
 
 	// -------------------------------------------------------------------- ISSUANCE -------------------------------------------------------------------- //
@@ -991,7 +918,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 
 	/**
 	 * @notice allows users to redeem token.
-	 * @param partition the token partition to reddem from.
+	 * @param partition the token partition to redeem from.
 	 * @param amount the amount of tokens to redeem.
 	 * @param data additional data attached to the transfer.
 	 */
@@ -1060,11 +987,9 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual override onlyController {
-		address operator = _msgSender();
+		_redeemByPartition(DEFAULT_PARTITION, _msgSender(), tokenHolder, amount, data, operatorData);
 
-		_redeemByPartition(DEFAULT_PARTITION, operator, tokenHolder, amount, data, operatorData);
-
-		emit ControllerRedemption(operator, tokenHolder, amount, data, operatorData);
+		emit ControllerRedemption(_msgSender(), tokenHolder, amount, data, operatorData);
 	}
 
 	/**
@@ -1082,11 +1007,9 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual onlyController isValidPartition(partition) {
-		address operator = _msgSender();
+		_redeemByPartition(partition, _msgSender(), tokenHolder, amount, data, operatorData);
 
-		_redeemByPartition(partition, operator, tokenHolder, amount, data, operatorData);
-
-		emit ControllerRedemptionByPartition(partition, operator, tokenHolder, amount, data, operatorData);
+		emit ControllerRedemptionByPartition(partition, _msgSender(), tokenHolder, amount, data, operatorData);
 	}
 
 	// --------------------------------------------------------------- INTERNAL FUNCTIONS --------------------------------------------------------------- //
@@ -1112,7 +1035,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
-		_beforeTokenTransfer(partition, operator, from, to, amount, data, operatorData);
 		require(partition != DEFAULT_PARTITION, "ERC1400: Wrong partition (DEFAULT_PARTITION)");
 		require(_balancesByPartition[from][partition] >= amount, "ERC1400: insufficient balance");
 		require(to != address(0), "ERC1400: transfer to zero address");
@@ -1141,7 +1063,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		if (!isController(operator)) {
 			emit TransferByPartition(partition, operator, from, to, amount, data, operatorData);
 		}
-		_afterTokenTransfer(partition, operator, from, to, amount, data, operatorData);
 
 		require(
 			_checkOnERC1400Received(partition, operator, from, to, amount, data, operatorData),
@@ -1166,7 +1087,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
-		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 		require(_balancesByPartition[from][DEFAULT_PARTITION] >= amount, "ERC1400: insufficient balance");
 		require(to != address(0), "ERC1400: transfer to zero address");
 		/** @dev prevent zero token transfers (spam transfers) */
@@ -1179,8 +1099,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		_balances[to] += amount;
 
 		if (!isController(operator)) emit Transfer(from, to, amount);
-
-		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 
 		require(
 			_checkOnERC1400Received(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData),
@@ -1199,9 +1117,10 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
-		_beforeTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
+		bytes32 role = ERC1400_TRANSFER_AGENT_ROLE;
+
 		ERC1400ValidateDataParams memory _data = ERC1400ValidateDataParams({
-			authorizerRole: ERC1400_TRANSFER_AGENT_ROLE,
+			authorizerRole: role,
 			from: from,
 			to: to,
 			amount: amount,
@@ -1211,11 +1130,10 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 
 		(bool authorized, address authorizer) = _validateData(_data);
 		require(authorized, "ERC1400: invalid data");
-		_spendNonce(ERC1400_TRANSFER_AGENT_ROLE, authorizer);
+		_spendNonce(role, authorizer);
 
 		_transfer(operator, from, to, amount, data, operatorData);
 		emit TransferWithData(authorizer, operator, from, to, amount, data);
-		_afterTokenTransfer(DEFAULT_PARTITION, operator, from, to, amount, data, operatorData);
 	}
 
 	/**
@@ -1256,16 +1174,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	}
 
 	/**
-	 * @notice internal approve function for default partition
-	 * @param owner the address that holds the tokens to be spent
-	 * @param spender the address that will spend the tokens
-	 * @param amount the amount of tokens to be spent
-	 */
-	function _approve(address owner, address spender, uint256 amount) internal virtual {
-		_approveByPartition(DEFAULT_PARTITION, owner, spender, amount);
-	}
-
-	/**
 	 * @notice internal approve function for any partition, including the default one
 	 * @param partition the partition to spend tokens from
 	 * @param owner the address that holds the tokens to be spent
@@ -1276,20 +1184,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		_allowanceByPartition[owner][partition][spender] = amount;
 		if (partition == DEFAULT_PARTITION) emit Approval(owner, spender, amount);
 		else emit ApprovalByPartition(partition, owner, spender, amount);
-	}
-
-	/**
-	 * @notice internal function to spend the allowance between two wallets of the default partition
-	 * @param owner the address that holds the tokens to be spent
-	 * @param spender the address that will spend the tokens
-	 * @param amount the amount of tokens to be spent
-	 */
-	function _spendAllowance(address owner, address spender, uint256 amount) internal virtual {
-		uint256 currentAllowance = allowance(owner, spender);
-		if (currentAllowance != type(uint256).max) {
-			require(currentAllowance >= amount, "ERC1400: insufficient allowance");
-			_approve(owner, spender, currentAllowance - amount);
-		}
 	}
 
 	/**
@@ -1331,8 +1225,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		require(_isIssuable, "ERC1400: Token is not issuable");
 		require(amount != 0, "ERC1400: zero amount");
 
-		_beforeTokenTransfer(partition, operator, address(0), account, amount, data, "");
-
 		_totalSupply += amount;
 		_totalSupplyByPartition[partition] += amount;
 		_balances[account] += amount;
@@ -1342,7 +1234,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 
 		if (partition == DEFAULT_PARTITION) emit Issued(operator, account, amount, data);
 		else emit IssuedByPartition(partition, account, amount, data);
-		_afterTokenTransfer(partition, operator, address(0), account, amount, data, "");
 
 		require(
 			_checkOnERC1400Received(partition, operator, address(0), account, amount, data, ""),
@@ -1357,7 +1248,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes32[] memory partitions = _partitions;
 		uint256 index = _partitionIndex[partition];
 
-		bytes32 currentPartition = partitions.length > 0 ? partitions[index] : DEFAULT_PARTITION;
+		bytes32 currentPartition = partitions.length != 0 ? partitions[index] : DEFAULT_PARTITION;
 
 		if (partition != currentPartition) {
 			///@dev partition does not exist, add partition to contract
@@ -1394,7 +1285,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
-		_beforeTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
 		require(_balancesByPartition[account][partition] >= amount, "ERC1400: Insufficient balance");
 		require(amount != 0, "ERC1400: zero amount");
 
@@ -1417,12 +1307,11 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 			if (partition == DEFAULT_PARTITION) emit Redeemed(operator, account, amount, data);
 			else emit RedeemedByPartition(partition, operator, account, amount, data, operatorData);
 		}
-		_afterTokenTransfer(partition, operator, account, address(0), amount, data, operatorData);
 	}
 
 	/**
 	 * @notice validate the data provided by the user when performing transactions that require validated data (signatures)
-	 * @notice reverts if the data is not encoded with the signature and dealine
+	 * @notice reverts if the data is not encoded with the signature and deadline
 	 * @param validateDataParams struct params containing data to be validated
 	 * @return bool 'true' if the recovered signer has @param authorizerRole, 'false' if not
 	 * @return the recovered signer
@@ -1444,8 +1333,7 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 				deadline
 			)
 		);
-		bytes32 structDataHash = _hashTypedDataV4(structData);
-		address recoveredSigner = ECDSA.recover(structDataHash, signature);
+		address recoveredSigner = ECDSA.recover(_hashTypedDataV4(structData), signature);
 		return (hasRole(validateDataParams.authorizerRole, recoveredSigner), recoveredSigner);
 	}
 
@@ -1461,12 +1349,6 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 	function _spendNonce(bytes32 role, address spender) private {
 		uint256 nonce = ++_roleNonce[role];
 		emit NonceSpent(role, spender, nonce - 1);
-	}
-
-	/// @dev intenal function to disable issuance of tokens
-	function _disableIssuance() internal virtual {
-		_isIssuable = false;
-		emit IssuanceDisabled();
 	}
 
 	/**
@@ -1543,30 +1425,4 @@ contract ERC1400 is IERC1400, Context, EIP712, ERC165, ERC1643 {
 		}
 		return true;
 	}
-
-	/**
-	@notice hook to be called before any token transfer
-	 */
-	function _beforeTokenTransfer(
-		bytes32 partition,
-		address operator,
-		address from,
-		address to,
-		uint256 amount,
-		bytes memory data,
-		bytes memory operatorData
-	) internal virtual {}
-
-	/**
-	 * @notice hook to be called after any token transfer
-	 */
-	function _afterTokenTransfer(
-		bytes32 partition,
-		address operator,
-		address from,
-		address to,
-		uint256 amount,
-		bytes memory data,
-		bytes memory operatorData
-	) internal virtual {}
 }
