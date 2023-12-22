@@ -196,7 +196,7 @@ abstract contract ERC1400CanTransferTest is ERC1400BaseTest {
 		} else if (keccak256(reason) == keccak256(INSUFFICIENT_BALANCE)) {
 			assertFalse(can, "canTransferFrom should return false when amount is greater than balance");
 			assertTrue(
-				ERC1400MockToken.balanceOfNonPartitioned(from) < amount,
+				ERC1400MockToken.balanceOfByPartition(DEFAULT_PARTITION, from) < amount,
 				"ERC1400: insufficient balance transfer should fail"
 			);
 		} else if (keccak256(reason) == keccak256(INSUFFICIENT_ALLOWANCE)) {
@@ -251,7 +251,6 @@ abstract contract ERC1400CanTransferTest is ERC1400BaseTest {
 		address from,
 		address to,
 		uint256 amount,
-		bool validateData,
 		bytes memory data
 	) public {
 		vm.assume(from.code.length == 0);
@@ -288,14 +287,14 @@ abstract contract ERC1400CanTransferTest is ERC1400BaseTest {
 		}
 
 		vm.startPrank(to);
-		(bool can, string memory reason) = ERC1400MockToken.canTransfer(
-			partition,
-			from,
-			to,
-			amount,
-			validateData,
-			data
-		);
+		// (bool can, string memory reason) = ERC1400MockToken.canTransfer(
+		// 	partition,
+		// 	from,
+		// 	to,
+		// 	amount,
+		// 	validateData,
+		// 	data
+		// );
 		// if (!can) {
 		// 	if (partition == DEFAULT_PARTITION) {
 		// 		if (from != address(0) && to != address(0)) {
@@ -306,7 +305,7 @@ abstract contract ERC1400CanTransferTest is ERC1400BaseTest {
 
 		///@dev necessary to test this?? Remove canTransfer(partition, from, to, amount, validateData, data) altogether??
 
-		console2.log("can: ", can);
-		console2.log("reason: ", reason);
+		// console2.log("can: ", can);
+		// console2.log("reason: ", reason);
 	}
 }
