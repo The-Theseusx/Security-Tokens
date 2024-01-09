@@ -488,7 +488,7 @@ abstract contract ERC1400TransferTest is ERC1400BaseTest {
 
 	function testShouldNotTransferFromWithInsufficientAllowance() public {
 		vm.startPrank(tokenAdmin);
-		vm.expectRevert("ERC1400: insufficient allowance");
+		vm.expectRevert("ERC1400: insufficient partition allowance");
 		ERC1400MockToken.transferFrom(tokenAdmin, bob, 1000e18);
 		vm.stopPrank();
 	}
