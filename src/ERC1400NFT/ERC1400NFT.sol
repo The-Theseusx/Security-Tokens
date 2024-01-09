@@ -50,9 +50,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	///@dev token symbol
 	string private _symbol;
 
-	///@dev base URI for computing {tokenURI}.
-	string private _baseUri;
-
 	///@dev should track if token is issuable or not. Should not be modifiable if false.
 	bool private _isIssuable;
 
@@ -176,7 +173,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	constructor(
 		string memory name_,
 		string memory symbol_,
-		string memory baseUri_,
 		string memory version_,
 		address tokenAdmin_,
 		address tokenIssuer_,
@@ -193,7 +189,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 
 		_name = name_;
 		_symbol = symbol_;
-		_baseUri = baseUri_;
 		_isIssuable = true;
 
 		_grantRole(DEFAULT_ADMIN_ROLE, tokenAdmin_); ///@dev give default admin role to token admin
@@ -296,17 +291,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	) public view virtual isValidPartition(partition) returns (bool) {
 		return (_partitionsOf[user].length != 0 &&
 			partition == _partitionsOf[user][_partitionIndexOfUser[user][partition]]);
-	}
-
-	/**
-	 * @param tokenId the token Id.
-	 * @return the token uri of a given tokenId.
-	 */
-	function tokenURI(uint256 tokenId) public view virtual returns (string memory) {
-		require(exists(tokenId), "ERC1400NFT: Invalid tokenId ");
-
-		string memory baseURI = _baseUri;
-		return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, tokenId.toString())) : "";
 	}
 
 	/**
@@ -1391,10 +1375,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	function _spendNonce(bytes32 role, address spender) private {
 		uint256 nonce = ++_roleNonce[role];
 		emit NonceSpent(role, spender, nonce - 1);
-	}
-
-	function _changeBaseURI(string memory baseUri_) internal virtual {
-		_baseUri = baseUri_;
 	}
 
 	/**
