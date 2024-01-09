@@ -15,7 +15,6 @@ abstract contract ERC1400NFTBaseTest is ERC1400NFTTestStorage, ERC1400NFTSigUtil
 		ERC1400NFTMockToken = new ERC1400NFT(
 			TOKEN_NAME,
 			TOKEN_SYMBOL,
-			TOKEN_BASE_URI,
 			TOKEN_VERSION,
 			tokenAdmin,
 			tokenIssuer,
