@@ -404,15 +404,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		}
 
 		if (data.length != 0) {
-			ERC1400NFTValidateDataParams memory _data = ERC1400NFTValidateDataParams({
-				authorizerRole: ERC1400_NFT_TRANSFER_AGENT_ROLE,
-				from: from,
-				to: to,
-				tokenId: tokenId,
-				partition: partition,
-				data: data
-			});
-			(bool can, ) = _validateData(_data);
+			(bool can, ) = _validateData(ERC1400_NFT_TRANSFER_AGENT_ROLE, from, to, tokenId, partition, data);
 			if (!can) return ("0x5f", "ERC1400NFT: ITD", partition);
 		}
 
@@ -511,15 +503,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 			}
 		}
 		if (data.length != 0) {
-			ERC1400NFTValidateDataParams memory _data = ERC1400NFTValidateDataParams({
-				authorizerRole: ERC1400_NFT_TRANSFER_AGENT_ROLE,
-				from: from,
-				to: to,
-				tokenId: tokenId,
-				partition: DEFAULT_PARTITION,
-				data: data
-			});
-			(bool can, ) = _validateData(_data);
+			(bool can, ) = _validateData(ERC1400_NFT_TRANSFER_AGENT_ROLE, from, to, tokenId, DEFAULT_PARTITION, data);
 			if (!can) return (false, "0x5f", bytes32(0));
 		}
 		return (true, "0x51", bytes32(0));
@@ -545,7 +529,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	 * @notice transfers from the default partition, see transferByPartitionFrom to transfer from a non-default partition.
 	 */
 	function transferFrom(address from, address to, uint256 tokenId) public virtual isOwnerOrApproved(to, tokenId) {
-		_transfer(_msgSender(), from, to, tokenId, "", "");
+		_transferByPartition(DEFAULT_PARTITION, _msgSender(), from, to, tokenId, "", "");
 	}
 
 	/**
@@ -602,18 +586,11 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		address operator = _msgSender();
 
 		if (data.length != 0) {
-			bytes32 agent = ERC1400_NFT_TRANSFER_AGENT_ROLE;
-			ERC1400NFTValidateDataParams memory _data = ERC1400NFTValidateDataParams({
-				authorizerRole: agent,
-				from: from,
-				to: to,
-				tokenId: tokenId,
-				partition: partition,
-				data: data
-			});
-			(bool authorized, address authorizer) = _validateData(_data);
+			bytes32 agentRole = ERC1400_NFT_TRANSFER_AGENT_ROLE;
+
+			(bool authorized, address authorizer) = _validateData(agentRole, from, to, tokenId, partition, data);
 			require(authorized, "ERC1400NFT: Invalid data");
-			_spendNonce(agent, authorizer);
+			_spendNonce(agentRole, authorizer);
 			_transferByPartition(partition, operator, from, to, tokenId, data, "");
 			return partition;
 		}
@@ -662,7 +639,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	) public virtual override onlyController {
 		address operator = _msgSender();
 
-		_transfer(operator, from, to, tokenId, data, operatorData);
+		_transferByPartition(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData);
 
 		emit ControllerTransfer(operator, from, to, tokenId, data, operatorData);
 	}
@@ -939,15 +916,15 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	function redeem(uint256 tokenId, bytes memory data) public virtual override {
 		bytes32 agentRole = ERC1400_NFT_REDEEMER_ROLE;
 		bytes32 partition = DEFAULT_PARTITION;
-		ERC1400NFTValidateDataParams memory _data = ERC1400NFTValidateDataParams({
-			authorizerRole: agentRole,
-			from: _msgSender(),
-			to: address(0),
-			tokenId: tokenId,
-			partition: partition,
-			data: data
-		});
-		(bool authorized, address authorizer) = _validateData(_data);
+
+		(bool authorized, address authorizer) = _validateData(
+			agentRole,
+			_msgSender(),
+			address(0),
+			tokenId,
+			partition,
+			data
+		);
 		require(authorized, "ERC1400NFT: Invalid data");
 		_spendNonce(agentRole, authorizer);
 		_redeemByPartition(partition, _msgSender(), _msgSender(), tokenId, data, "");
@@ -979,15 +956,15 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data
 	) public virtual override isValidPartition(partition) {
 		bytes32 agentRole = ERC1400_NFT_REDEEMER_ROLE;
-		ERC1400NFTValidateDataParams memory _data = ERC1400NFTValidateDataParams({
-			authorizerRole: agentRole,
-			from: _msgSender(),
-			to: address(0),
-			tokenId: tokenId,
-			partition: partition,
-			data: data
-		});
-		(bool authorized, address authorizer) = _validateData(_data);
+
+		(bool authorized, address authorizer) = _validateData(
+			agentRole,
+			_msgSender(),
+			address(0),
+			tokenId,
+			partition,
+			data
+		);
 		require(authorized, "ERC1400NFT: Invalid data");
 		_spendNonce(agentRole, authorizer);
 		_redeemByPartition(partition, _msgSender(), _msgSender(), tokenId, data, "");
@@ -1008,16 +985,8 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		bytes memory operatorData
 	) public virtual override isValidPartition(partition) {
 		bytes32 agentRole = ERC1400_NFT_REDEEMER_ROLE;
-		ERC1400NFTValidateDataParams memory _data = ERC1400NFTValidateDataParams({
-			authorizerRole: agentRole,
-			from: account,
-			to: address(0),
-			tokenId: tokenId,
-			partition: partition,
-			data: data
-		});
 
-		(bool authorized, address authorizer) = _validateData(_data);
+		(bool authorized, address authorizer) = _validateData(agentRole, account, address(0), tokenId, partition, data);
 		require(authorized, "ERC1400NFT: Invalid data");
 		_spendNonce(agentRole, authorizer);
 
@@ -1065,46 +1034,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	// ------------------------------------------------------- INTERNAL & PRIVATE FUNCTIONS ------------------------------------------------------- //
 
 	/**
-	 * @notice internal function to transfer tokens from the default partition.
-	 * @param operator the address performing the transfer
-	 * @param from the address to transfer tokens from
-	 * @param to the address to transfer tokens to
-	 * @param tokenId the id of the token to transfer
-	 * @param data additional data attached to the transfer
-	 * @param operatorData additional data attached to the transfer by the operator (if any)
-	 */
-	function _transfer(
-		address operator,
-		address from,
-		address to,
-		uint256 tokenId,
-		bytes memory data,
-		bytes memory operatorData
-	) internal virtual {
-		require(to != address(0), "ERC1400NFT: transfer to the zero address");
-		require(partitionOfToken(tokenId) == DEFAULT_PARTITION, "ERC1400NFT: token is not in the default partition");
-
-		require(ownerOf(tokenId) == from, "ERC1400NFT: transfer not from token owner");
-
-		unchecked {
-			_balancesByPartition[from][DEFAULT_PARTITION] -= 1;
-			_balances[from] -= 1;
-
-			_balancesByPartition[to][DEFAULT_PARTITION] += 1;
-			_balances[to] += 1;
-		}
-		_owners[tokenId] = to;
-		delete _tokenApprovalsByPartition[tokenId][DEFAULT_PARTITION];
-
-		emit Transfer(operator, from, to, tokenId, DEFAULT_PARTITION, data, operatorData);
-
-		require(
-			_checkOnERC1400NFTReceived(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData),
-			"ERC1400NFT: transfer to non ERC1400Receiver implementer"
-		);
-	}
-
-	/**
 	 * @dev transfers tokens from a sender to a recipient with data
 	 */
 	function _transferWithData(
@@ -1116,20 +1045,12 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		bytes memory operatorData
 	) internal virtual {
 		bytes32 agentRole = ERC1400_NFT_TRANSFER_AGENT_ROLE;
-		ERC1400NFTValidateDataParams memory _data = ERC1400NFTValidateDataParams({
-			authorizerRole: agentRole,
-			from: from,
-			to: to,
-			tokenId: tokenId,
-			partition: DEFAULT_PARTITION,
-			data: data
-		});
 
-		(bool authorized, address authorizer) = _validateData(_data);
+		(bool authorized, address authorizer) = _validateData(agentRole, from, to, tokenId, DEFAULT_PARTITION, data);
 		require(authorized, "ERC1400NFT: Invalid data");
 		_spendNonce(agentRole, authorizer);
 
-		_transfer(operator, from, to, tokenId, data, operatorData);
+		_transferByPartition(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData);
 		emit TransferWithData(_msgSender(), to, tokenId, data);
 	}
 
@@ -1152,9 +1073,9 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
-		require(partition != DEFAULT_PARTITION, "ERC1400NFT: !default partition");
 		require(partitionOfToken(tokenId) == partition, "ERC1400NFT: !partition");
 		require(to != address(0), "ERC1400NFT: transfer to the zero address");
+		require(ownerOf(tokenId) == from, "ERC1400NFT: transfer not from token owner");
 		if (operator != from) {
 			require(
 				isOperatorForPartition(partition, operator, from) ||
@@ -1164,22 +1085,25 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 			);
 		}
 
-		require(ownerOf(tokenId) == from, "ERC1400NFT: transfer not from token owner");
+		unchecked {
+			_balancesByPartition[from][partition] -= 1;
+			_balances[from] -= 1;
+			_balancesByPartition[to][partition] += 1;
+			_balances[to] += 1;
+		}
 
-		_balancesByPartition[from][partition] -= 1;
-		_balances[from] -= 1;
-
-		if (!isUserPartition(partition, to)) {
+		if (!isUserPartition(partition, to) && partition != DEFAULT_PARTITION) {
 			_partitionIndexOfUser[to][partition] = _partitionsOf[to].length;
 			_partitionsOf[to].push(partition);
 		}
 
-		_balancesByPartition[to][partition] += 1;
-		_balances[to] += 1;
 		_owners[tokenId] = to;
+
 		delete _tokenApprovalsByPartition[tokenId][partition];
 
-		emit TransferByPartition(partition, operator, from, to, tokenId, data, operatorData);
+		if (partition == DEFAULT_PARTITION) {
+			emit Transfer(operator, from, to, tokenId, partition, data, operatorData);
+		} else emit TransferByPartition(partition, operator, from, to, tokenId, data, operatorData);
 
 		require(
 			_checkOnERC1400NFTReceived(partition, operator, from, to, tokenId, data, operatorData),
@@ -1280,7 +1204,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		bytes32[] memory partitions = _partitions;
 		uint256 index = _partitionIndex[partition];
 
-		bytes32 currentPartition = (index == 0 && partitions.length > 0) ? partitions[index] : DEFAULT_PARTITION;
+		bytes32 currentPartition = (index == 0 && partitions.length != 0) ? partitions[index] : DEFAULT_PARTITION;
 
 		if (partition != currentPartition) {
 			///@dev partition does not exist, add partition to contract
@@ -1341,26 +1265,42 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		}
 	}
 
+	/**
+	 * @notice internal function to validate data
+	 * @param authorizerRole the role of the authorizer
+	 * @param from the address to transfer from
+	 * @param to the address to transfer to
+	 * @param tokenId the tokenId to transfer
+	 * @param partition the partition @param tokenId is associated with
+	 * @param data transfer data.
+	 * @return bool 'true' if @param data is valid, 'false' if not.
+	 * @return address the address of the recovered signer
+	 */
 	function _validateData(
-		ERC1400NFTValidateDataParams memory validateDataParams
+		bytes32 authorizerRole,
+		address from,
+		address to,
+		uint256 tokenId,
+		bytes32 partition,
+		bytes memory data
 	) internal view virtual returns (bool, address) {
-		(bytes memory signature, uint48 deadline) = abi.decode(validateDataParams.data, (bytes, uint48));
+		(bytes memory signature, uint48 deadline) = abi.decode(data, (bytes, uint48));
 		require(deadline >= block.timestamp, "ERC1400NFT: Expired signature");
-
+		bytes32 authorizerRole_ = authorizerRole;
 		bytes32 structData = keccak256(
 			abi.encode(
 				ERC1400NFT_DATA_VALIDATION_HASH,
-				validateDataParams.from,
-				validateDataParams.to,
-				validateDataParams.tokenId,
-				validateDataParams.partition,
-				_roleNonce[validateDataParams.authorizerRole],
+				from,
+				to,
+				tokenId,
+				partition,
+				_roleNonce[authorizerRole_],
 				deadline
 			)
 		);
 		address recoveredSigner = ECDSA.recover(_hashTypedDataV4(structData), signature);
 
-		return (hasRole(validateDataParams.authorizerRole, recoveredSigner), recoveredSigner);
+		return (hasRole(authorizerRole_, recoveredSigner), recoveredSigner);
 	}
 
 	/**
