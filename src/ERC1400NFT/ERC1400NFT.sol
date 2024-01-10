@@ -1241,15 +1241,16 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data,
 		bytes memory operatorData
 	) internal virtual {
-		require(exists(tokenId), "ERC1400NFT: Token does not exist");
+		require(exists(tokenId), "ERC1400NFT: nonexistent token");
 		require(_owners[tokenId] == account, "ERC1400NFT: Not token owner");
+		require(partitionOfToken(tokenId) == partition, "ERC1400NFT: Invalid token partition");
 		if (operator != account) {
 			require(
 				isOperatorForPartition(partition, operator, account) ||
 					isOperator(operator, account) ||
 					isController(operator) ||
 					hasRole(ERC1400_NFT_REDEEMER_ROLE, operator),
-				"ERC1400NFT: transfer operator is not authorized"
+				"ERC1400NFT: operator not authorized"
 			);
 		}
 
