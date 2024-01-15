@@ -143,7 +143,15 @@ abstract contract ERC1400NFTTestStorage is Test {
 		bytes data,
 		bytes operatorData
 	);
-	event Transfer(address indexed from, address indexed to, uint256 value);
+	event Transfer(
+		address operator,
+		address indexed from,
+		address indexed to,
+		uint256 tokenId,
+		bytes32 indexed partition,
+		bytes data,
+		bytes operatorData
+	);
 	event TransferWithData(
 		address indexed authorizer,
 		address operator,
