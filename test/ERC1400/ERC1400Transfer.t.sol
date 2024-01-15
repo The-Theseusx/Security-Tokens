@@ -72,7 +72,7 @@ abstract contract ERC1400TransferTest is ERC1400BaseTest {
 		vm.stopPrank();
 	}
 
-	function testShoulNotTransferWithDataWhenNoData() public {
+	function testShouldNotTransferWithDataWhenNoData() public {
 		vm.startPrank(tokenAdmin);
 		vm.expectRevert();
 		ERC1400MockToken.transferWithData(alice, 100e18, "");
