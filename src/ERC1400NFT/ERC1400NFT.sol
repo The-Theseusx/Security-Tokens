@@ -528,8 +528,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	 */
 	function transferWithData(address to, uint256 tokenId, bytes memory data) public virtual override {
 		address operator = _msgSender();
-		require(data.length != 0, "ERC1400NFT: Invalid data");
-		_transferWithData(operator, operator, to, tokenId, data, "");
+		_transferByPartition(DEFAULT_PARTITION, operator, operator, to, tokenId, data, "", false);
 	}
 
 	/**
