@@ -6,13 +6,15 @@ import { ERC1400NFTApprovalTest } from "./ERC1400NFTApproval.t.sol";
 import { ERC1400NFTIssuanceTest } from "./ERC1400NFTIssuance.t.sol";
 import { ERC1400NFTRedemptionTest } from "./ERC1400NFTRedemption.t.sol";
 import { ERC1400NFTDocumentTest } from "./ERC1400NFTDocument.t.sol";
+import { ERC1400NFTTransferTest } from "./ERC1400NFTTransfer.t.sol";
 
 contract ERC1400NFTTest is
 	ERC1400NFTBaseTest,
 	ERC1400NFTApprovalTest,
 	ERC1400NFTIssuanceTest,
 	ERC1400NFTRedemptionTest,
-	ERC1400NFTDocumentTest
+	ERC1400NFTDocumentTest,
+	ERC1400NFTTransferTest
 {
 	function testItHasAName() public {
 		string memory name = ERC1400NFTMockToken.name();
