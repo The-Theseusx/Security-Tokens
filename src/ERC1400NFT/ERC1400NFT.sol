@@ -295,7 +295,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 
 	/**
 	 * @param tokenId the token Id.
-	 * @return the owner of a tokenId. Reverts if the token does not exist.
+	 * @return the owner of a tokenId.
 	 */
 	function ownerOf(uint256 tokenId) public view virtual returns (address) {
 		return _owners[tokenId];
@@ -511,6 +511,16 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 
 	// --------------------------------------------------------------- TRANSFERS --------------------------------------------------------------- //
 	/**
+	 * @param from the address to transfer @param tokenId from
+	 * @param to the address to transfer @param tokenId to
+	 * @param tokenId the transfer to transfer
+	 * @notice transfers from the default partition, see transferByPartitionFrom to transfer from a non-default partition.
+	 */
+	function transferFrom(address from, address to, uint256 tokenId) public virtual isOwnerOrApproved(to, tokenId) {
+		_transferByPartition(DEFAULT_PARTITION, _msgSender(), from, to, tokenId, "", "", false);
+	}
+
+	/**
 	 * @notice transfer tokens from the default partition with additional data.
 	 * @param to the address to transfer tokens to
 	 * @param tokenId the tokenId to transfer
@@ -520,16 +530,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		address operator = _msgSender();
 		require(data.length != 0, "ERC1400NFT: Invalid data");
 		_transferWithData(operator, operator, to, tokenId, data, "");
-	}
-
-	/**
-	 * @param from the address to transfer @param tokenId from
-	 * @param to the address to transfer @param tokenId to
-	 * @param tokenId the transfer to transfer
-	 * @notice transfers from the default partition, see transferByPartitionFrom to transfer from a non-default partition.
-	 */
-	function transferFrom(address from, address to, uint256 tokenId) public virtual isOwnerOrApproved(to, tokenId) {
-		_transferByPartition(DEFAULT_PARTITION, _msgSender(), from, to, tokenId, "", "");
 	}
 
 	/**
@@ -561,7 +561,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		uint256 tokenId,
 		bytes memory data
 	) public virtual override isValidPartition(partition) returns (bytes32) {
-		_transferByPartition(partition, _msgSender(), _msgSender(), to, tokenId, data, "");
+		_transferByPartition(partition, _msgSender(), _msgSender(), to, tokenId, data, "", false);
 		return partition;
 	}
 
@@ -591,11 +591,11 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 			(bool authorized, address authorizer) = _validateData(agentRole, from, to, tokenId, partition, data);
 			require(authorized, "ERC1400NFT: Invalid data");
 			_spendNonce(agentRole, authorizer);
-			_transferByPartition(partition, operator, from, to, tokenId, data, "");
+			_transferByPartition(partition, operator, from, to, tokenId, data, "", true);
 			return partition;
 		}
 		require(ownerOf(tokenId) == operator || getApproved(tokenId) == to, "ERC1400NFT: !approved");
-		_transferByPartition(partition, operator, from, to, tokenId, data, "");
+		_transferByPartition(partition, operator, from, to, tokenId, data, "", false);
 		return partition;
 	}
 
@@ -618,7 +618,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		bytes memory operatorData
 	) public virtual override isValidPartition(partition) returns (bytes32) {
 		require(_operatorApprovalsByPartition[from][partition][_msgSender()], "ERC1400NFT: !authorized");
-		_transferByPartition(partition, _msgSender(), from, to, tokenId, data, operatorData);
+		_transferByPartition(partition, _msgSender(), from, to, tokenId, data, operatorData, false);
 		return partition;
 	}
 
@@ -639,7 +639,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	) public virtual override onlyController {
 		address operator = _msgSender();
 
-		_transferByPartition(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData);
+		_transferByPartition(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData, false);
 
 		emit ControllerTransfer(operator, from, to, tokenId, data, operatorData);
 	}
@@ -662,7 +662,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		bytes memory operatorData
 	) public virtual onlyController isValidPartition(partition) {
 		address operator = _msgSender();
-		_transferByPartition(partition, operator, from, to, tokenId, data, operatorData);
+		_transferByPartition(partition, operator, from, to, tokenId, data, operatorData, false);
 
 		emit ControllerTransferByPartition(partition, operator, from, to, tokenId, data, operatorData);
 	}
@@ -672,8 +672,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	function approve(address to, uint256 tokenId) public virtual {
 		address owner = ownerOf(tokenId);
 		require(_msgSender() == owner, "ERC1400NFT: caller is not token owner ");
-		require(to != owner, "ERC1400NFT: approval to current owner");
-		require(partitionOfToken(tokenId) == DEFAULT_PARTITION, "ERC1400NFT: token is not in the default partition");
+		require(partitionOfToken(tokenId) == DEFAULT_PARTITION, "ERC1400NFT: invalid token partition");
 		_approveByPartition(DEFAULT_PARTITION, owner, to, tokenId);
 	}
 
@@ -1050,7 +1049,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		require(authorized, "ERC1400NFT: Invalid data");
 		_spendNonce(agentRole, authorizer);
 
-		_transferByPartition(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData);
+		_transferByPartition(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData, false);
 		emit TransferWithData(_msgSender(), to, tokenId, data);
 	}
 
@@ -1071,18 +1070,23 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		address to,
 		uint256 tokenId,
 		bytes memory data,
-		bytes memory operatorData
+		bytes memory operatorData,
+		bool approvedData
 	) internal virtual {
 		require(partitionOfToken(tokenId) == partition, "ERC1400NFT: !partition");
 		require(to != address(0), "ERC1400NFT: transfer to the zero address");
-		require(ownerOf(tokenId) == from, "ERC1400NFT: transfer not from token owner");
-		if (operator != from) {
-			require(
-				isOperatorForPartition(partition, operator, from) ||
-					isOperator(operator, from) ||
-					isController(operator),
-				"ERC1400NFT: !operator or controller for partition"
-			);
+		require(ownerOf(tokenId) == from, "ERC1400NFT: not token owner");
+		if (operator != from && !approvedData) {
+			if (_tokenApprovalsByPartition[tokenId][partition] == to) {
+				delete _tokenApprovalsByPartition[tokenId][partition];
+			} else {
+				require(
+					isOperatorForPartition(partition, operator, from) ||
+						isOperator(operator, from) ||
+						isController(operator),
+					"ERC1400NFT: !operator or controller"
+				);
+			}
 		}
 
 		unchecked {
