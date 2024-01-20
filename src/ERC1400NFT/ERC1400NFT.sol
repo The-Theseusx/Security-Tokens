@@ -96,8 +96,6 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	mapping(bytes32 => uint256) private _roleNonce;
 
 	// --------------------------------------------------------------- EVENTS --------------------------------------------------------------- //
-	///@dev event emitted when tokens are transferred with data attached
-	event TransferWithData(address indexed from, address indexed to, uint256 tokenId, bytes data);
 
 	///@dev event emitted when issuance is disabled
 	event IssuanceDisabled();
@@ -543,12 +541,12 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		address to,
 		uint256 tokenId,
 		bytes memory data
-	) public virtual override isOwnerOrApproved(to, tokenId) {
+	) public virtual override {
 		_transferWithData(_msgSender(), from, to, tokenId, data, "");
 	}
 
 	/**
-	 * @notice since msg.sender is the token holder, the data argument would be empty ("") unless the token holder wishes to send additional metadata.
+	 * @notice since msg.sender is the token holder, the data argument should be empty ("") unless the token holder wishes to send additional metadata.
 	 * @param partition the partition tokenId is associated with.
 	 * @param to the address to transfer to
 	 * @param tokenId of the token to transfer
@@ -566,9 +564,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 
 	/**
 	 * @notice since an authorized body might be forcing a token transfer from a different address, 
-	   the @param data could be a signature authorizing the transfer.
-	 * @notice in the case of a forced transfer, the data would be a signature authorizing the transfer hence the data must be validated.
-	 * @notice if it is a normal transferFrom, the operator data would be empty ("").
+	   @param data could be a signature authorizing the transfer.
 	 * @param partition the partition @param tokenId is associated with.
 	 * @param from the address to transfer from
 	 * @param to the address to transfer to
@@ -584,7 +580,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	) public virtual isValidPartition(partition) returns (bytes32) {
 		address operator = _msgSender();
 
-		if (data.length != 0) {
+		if (data.length != 0 && from != operator) {
 			bytes32 agentRole = ERC1400_NFT_TRANSFER_AGENT_ROLE;
 
 			(bool authorized, address authorizer) = _validateData(agentRole, from, to, tokenId, partition, data);
@@ -593,7 +589,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 			_transferByPartition(partition, operator, from, to, tokenId, data, "", true);
 			return partition;
 		}
-		require(ownerOf(tokenId) == operator || getApproved(tokenId) == to, "ERC1400NFT: !approved");
+		require(ownerOf(tokenId) == operator || getApproved(tokenId) == to, "ERC1400NFT: !owner or approved");
 		_transferByPartition(partition, operator, from, to, tokenId, data, "", false);
 		return partition;
 	}
@@ -616,7 +612,10 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		bytes memory data,
 		bytes memory operatorData
 	) public virtual override isValidPartition(partition) returns (bytes32) {
-		require(_operatorApprovalsByPartition[from][partition][_msgSender()], "ERC1400NFT: !authorized");
+		require(
+			_operatorApprovals[from][_msgSender()] || _operatorApprovalsByPartition[from][partition][_msgSender()],
+			"ERC1400NFT: !authorized"
+		);
 		_transferByPartition(partition, _msgSender(), from, to, tokenId, data, operatorData, false);
 		return partition;
 	}
@@ -1048,8 +1047,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 		require(authorized, "ERC1400NFT: Invalid data");
 		_spendNonce(agentRole, authorizer);
 
-		_transferByPartition(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData, false);
-		emit TransferWithData(_msgSender(), to, tokenId, data);
+		_transferByPartition(DEFAULT_PARTITION, operator, from, to, tokenId, data, operatorData, true);
 	}
 
 	/**
