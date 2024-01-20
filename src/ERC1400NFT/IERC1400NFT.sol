@@ -61,6 +61,50 @@ interface IERC1400NFT is IERC1643 {
 		bytes operatorData
 	);
 
+	// --------------------------------------------------------------- CUSTOM EVENTS --------------------------------------------------------------- //
+
+	///@dev event emitted when issuance is disabled
+	event IssuanceDisabled();
+	event Transfer(
+		address operator,
+		address indexed from,
+		address indexed to,
+		uint256 tokenId,
+		bytes32 indexed partition,
+		bytes data,
+		bytes operatorData
+	);
+	event Approval(address indexed owner, address indexed spender, uint256 tokenId, bytes32 indexed partition);
+	event ControllerAdded(address indexed controller);
+	event ControllerRemoved(address indexed controller);
+	event ControllerTransferByPartition(
+		bytes32 indexed partition,
+		address indexed controller,
+		address indexed from,
+		address to,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
+	event ControllerRedemptionByPartition(
+		bytes32 indexed partition,
+		address indexed controller,
+		address indexed tokenHolder,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
+	event ChangedPartition(
+		address operator,
+		bytes32 indexed partitionFrom,
+		bytes32 indexed partitionTo,
+		address indexed account,
+		uint256 tokenId,
+		bytes data,
+		bytes operatorData
+	);
+	event NonceSpent(bytes32 indexed role, address indexed spender, uint256 nonceSpent);
+
 	// Token Information
 	function isIssuable() external view returns (bool);
 
