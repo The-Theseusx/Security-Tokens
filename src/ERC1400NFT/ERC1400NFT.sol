@@ -614,7 +614,7 @@ contract ERC1400NFT is IERC1400NFT, Context, EIP712, ERC165, ERC1643 {
 	) public virtual override isValidPartition(partition) returns (bytes32) {
 		require(
 			_operatorApprovals[from][_msgSender()] || _operatorApprovalsByPartition[from][partition][_msgSender()],
-			"ERC1400NFT: !authorized"
+			"ERC1400NFT: unauthorized"
 		);
 		_transferByPartition(partition, _msgSender(), from, to, tokenId, data, operatorData, false);
 		return partition;
