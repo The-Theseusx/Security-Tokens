@@ -10,42 +10,93 @@ import { IERC1644 } from "./IERC1644.sol";
  */
 
 contract ERC1644 is IERC1644, ERC1594 {
-	/**
-	 * @dev address of the controller
-	 */
-	address private _controller;
+	/// @dev address of the controller
+	address[] private _controllers;
+
+	///@dev mapping of controller to index in _controllers array.
+	mapping(address => uint256) private _controllerIndex;
+
+	event ControllerAdded(address indexed controller);
+	event ControllerRemoved(address indexed controller);
+
+	error ERC1644_NotAController();
+	error ERC1644_InvalidController(address controller);
 
 	modifier onlyController() {
-		require(msg.sender == _controller, "ERC1644: not controller");
+		if (_controllers.length == 0 || _controllers[_controllerIndex[_msgSender()]] != _msgSender()) {
+			revert ERC1644_NotAController();
+		}
 		_;
 	}
-
 	event ControllerUpdated(address indexed previousController, address indexed controller);
 
 	constructor(
 		string memory name_,
 		string memory symbol_,
 		string memory version_,
-		address controller_
-	) ERC1594(name_, symbol_, version_) {
-		emit ControllerUpdated(address(0), controller_);
-		_controller = controller_;
-	}
-
-	function controller() public view virtual returns (address) {
-		return _controller;
-	}
+		address tokenAdmin,
+		address tokenIssuer,
+		address tokenRedeemer,
+		address tokenTransferAgent
+	) ERC1594(name_, symbol_, version_, tokenAdmin, tokenIssuer, tokenRedeemer, tokenTransferAgent) {}
 
 	/**
 	 * @dev See {IERC1644-isControllable}.
 	 */
 	function isControllable() public view virtual override returns (bool) {
-		return !(_controller == address(0));
+		return _controllers.length != 0;
 	}
 
-	function setController(address controller_) public virtual onlyOwner {
-		emit ControllerUpdated(_controller, controller_);
-		_controller = controller_;
+	/// @return true if @param controller is a controller of this token.
+	function isController(address controller) public view virtual returns (bool) {
+		return _controllers.length != 0 && controller == _controllers[_controllerIndex[controller]];
+	}
+
+	/// @return the list of controllers of this token.
+	function getControllers() public view virtual returns (address[] memory) {
+		return _controllers;
+	}
+
+	///  @notice add controllers for the token.
+
+	function addControllers(address[] memory controllers) public virtual onlyRole(ERC1594_ADMIN_ROLE) {
+		uint256 controllersLength = controllers.length;
+		uint256 i;
+
+		for (; i < controllersLength; ++i) {
+			if (controllers[i] == address(0)) revert ERC1644_InvalidController(controllers[i]);
+			if (isController(controllers[i])) continue;
+
+			uint256 newControllerIndex = _controllers.length;
+
+			_controllers.push(controllers[i]);
+			_controllerIndex[controllers[i]] = newControllerIndex;
+			emit ControllerAdded(controllers[i]);
+		}
+	}
+
+	/// @notice remove controllers for the token.
+	function removeControllers(address[] memory controllers) external virtual onlyRole(ERC1594_ADMIN_ROLE) {
+		uint256 controllersLength = controllers.length;
+		uint256 i;
+
+		for (; i < controllersLength; ++i) {
+			if (controllers[i] == address(0)) revert ERC1644_InvalidController(controllers[i]);
+
+			uint256 controllerIndex = _controllerIndex[controllers[i]];
+
+			if (!isController(controllers[i])) continue;
+
+			uint256 lastControllerIndex = _controllers.length - 1;
+			address lastController = _controllers[lastControllerIndex];
+
+			_controllers[controllerIndex] = lastController;
+			_controllerIndex[lastController] = controllerIndex;
+			delete _controllerIndex[controllers[i]];
+			_controllers.pop();
+
+			emit ControllerRemoved(controllers[i]);
+		}
 	}
 
 	/**
@@ -58,7 +109,9 @@ contract ERC1644 is IERC1644, ERC1594 {
 		bytes calldata data,
 		bytes calldata operatorData
 	) public virtual override onlyController {
-		_controllerTransfer(from, to, amount, data, operatorData);
+		_transfer(from, to, amount);
+
+		emit ControllerTransfer(_msgSender(), from, to, amount, data, operatorData);
 	}
 
 	/**
@@ -70,66 +123,8 @@ contract ERC1644 is IERC1644, ERC1594 {
 		bytes calldata data,
 		bytes calldata operatorData
 	) public virtual override onlyController {
-		_controllerRedeem(tokenHolder, value, data, operatorData);
-	}
+		_burn(tokenHolder, value);
 
-	/**
-	 * @dev See {IERC1644-controllerTransfer}.
-	 */
-	function _controllerTransfer(
-		address from,
-		address to,
-		uint256 amount,
-		bytes calldata data,
-		bytes calldata operatorData
-	) internal virtual {
-		if (data.length == 0) {
-			_transfer(from, to, amount);
-		} else {
-			_transferWithData(from, to, amount, data);
-		}
-		emit ControllerTransfer(msg.sender, from, to, amount, data, operatorData);
-	}
-
-	/**
-	 * @dev See {IERC1644-controllerRedeem}.
-	 */
-	function _controllerRedeem(
-		address tokenHolder,
-		uint256 value,
-		bytes calldata data,
-		bytes calldata operatorData
-	) internal virtual {
-		if (data.length == 0) {
-			_burn(tokenHolder, value);
-		} else {
-			_redeemFrom(tokenHolder, value, data);
-		}
-		emit ControllerRedemption(msg.sender, tokenHolder, value, data, operatorData);
-	}
-
-	function _transferWithData(
-		address from,
-		address to,
-		uint256 amount,
-		bytes calldata data
-	) internal virtual override {
-		_beforeTokenTransferWithData(from, to, amount, data);
-
-		require(_validateData(_controller, from, to, amount, data), "ERC1594: invalid data");
-
-		_transfer(from, to, amount);
-		emit TransferWithData(msg.sender, to, amount, data);
-		_afterTokenTransferWithData(from, to, amount, data);
-	}
-
-	function _redeemFrom(address tokenHolder, uint256 amount, bytes calldata data) internal virtual override {
-		_beforeTokenTransferWithData(tokenHolder, address(0), amount, data);
-
-		require(_validateData(_controller, tokenHolder, address(0), amount, data), "ERC1594: invalid data");
-
-		_burn(tokenHolder, amount);
-		emit Redeemed(msg.sender, tokenHolder, amount, data);
-		_afterTokenTransferWithData(tokenHolder, address(0), amount, data);
+		emit ControllerRedemption(_msgSender(), tokenHolder, value, data, operatorData);
 	}
 }
