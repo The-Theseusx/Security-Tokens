@@ -17,6 +17,10 @@ abstract contract ERC1643 is IERC1643, AccessControl {
 		string uri; // URI of the document that exist off-chain
 	}
 
+	error ERC1643_InvalidDocumentName();
+	error ERC1643_InvalidDocumentUri(string uri);
+	error ERC1643_NonExistentDocument(bytes32 name);
+
 	constructor(address admin, bytes32 authRole) {
 		_grantRole(authRole, admin);
 		adminRole = authRole;
@@ -49,8 +53,8 @@ abstract contract ERC1643 is IERC1643, AccessControl {
 		string memory uri,
 		bytes32 documentHash
 	) public virtual override onlyRole(adminRole) {
-		require(name != bytes32(0), "ERC1643: name must not be empty");
-		require(bytes(uri).length > 0, "ERC1643: uri length must be > 0");
+		if (name == bytes32(0)) revert ERC1643_InvalidDocumentName();
+		if (bytes(uri).length > 0) revert ERC1643_InvalidDocumentUri(uri);
 
 		if (documents[name].lastModified == 0) {
 			documents[name] = Document(documentHash, block.timestamp, uri);
@@ -73,10 +77,10 @@ abstract contract ERC1643 is IERC1643, AccessControl {
 	 * @param name Name of the document.
 	 */
 	function removeDocument(bytes32 name) public virtual override onlyRole(adminRole) {
-		require(name != bytes32(0), "ERC1643: name must not be empty");
+		if (name == bytes32(0)) revert ERC1643_InvalidDocumentName();
 
 		Document memory doc = documents[name];
-		require(doc.lastModified != 0, "ERC1643: document does not exist");
+		if (doc.lastModified == 0 || bytes(doc.uri).length == 0) revert ERC1643_NonExistentDocument(name);
 		delete documents[name];
 
 		uint256 index = documentIndex[name];
