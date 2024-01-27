@@ -211,7 +211,7 @@ contract ERC1594 is IERC1594, ERC20, EIP712, Ownable2Step {
 	}
 
 	/**
-	 * @dev intenal function to disable issuance of tokens
+	 * @dev internal function to disable issuance of tokens
 	 */
 	function _disableIssuance() internal virtual {
 		_isIssuable = false;
