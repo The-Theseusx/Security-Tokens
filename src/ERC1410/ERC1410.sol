@@ -1,7 +1,7 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import { Ownable2Step } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
+import { Ownable2Step, Ownable } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import { ERC165 } from "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
 import { IERC1410 } from "./IERC1410.sol";
@@ -35,7 +35,7 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 	string private _version;
 
 	/**
-	 * @dev token total suppply irrespective of partition.
+	 * @dev token total supply irrespective of partition.
 	 */
 	uint256 private _totalSupply;
 
@@ -120,7 +120,11 @@ contract ERC1410 is IERC1410, ERC165, EIP712, Ownable2Step {
 		bytes32 operatorData
 	);
 
-	constructor(string memory name_, string memory symbol_, string memory version_) EIP712(name_, version_) {
+	constructor(
+		string memory name_,
+		string memory symbol_,
+		string memory version_
+	) EIP712(name_, version_) Ownable(msg.sender) {
 		_name = name_;
 		_symbol = symbol_;
 		_version = version_;
