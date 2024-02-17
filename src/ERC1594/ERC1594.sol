@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import { ERC20 } from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
-import { Ownable2Step } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import { AccessControl } from "openzeppelin-contracts/contracts/access/AccessControl.sol";
 import { IERC1594 } from "./IERC1594.sol";
 import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
@@ -32,7 +31,6 @@ contract ERC1594 is IERC1594, ERC20, EIP712, AccessControl {
 	bytes32 public constant ERC1594_TRANSFER_AGENT_ROLE = keccak256("ERC1594_TRANSFER_AGENT_ROLE");
 
 	///  @dev should track if token is issuable or not. Should not be modifiable if false.
-
 	bool private _isIssuable;
 
 	mapping(bytes32 => uint256) private _roleNonce;
@@ -72,9 +70,7 @@ contract ERC1594 is IERC1594, ERC20, EIP712, AccessControl {
 		_isIssuable = true;
 	}
 
-	/**
-	 * @dev See {IERC1594-isIssuable}.
-	 */
+	/// @dev See {IERC1594-isIssuable}.
 	function isIssuable() public view virtual override returns (bool) {
 		return _isIssuable;
 	}
@@ -84,9 +80,7 @@ contract ERC1594 is IERC1594, ERC20, EIP712, AccessControl {
 		return _roleNonce[role];
 	}
 
-	/**
-	 * @dev See {IERC1594-issue}.
-	 */
+	/// @dev See {IERC1594-issue}.
 	function issue(
 		address tokenHolder,
 		uint256 amount,
@@ -99,9 +93,7 @@ contract ERC1594 is IERC1594, ERC20, EIP712, AccessControl {
 		_issue(tokenHolder, amount, data);
 	}
 
-	/**
-	 * @dev See {IERC1594-redeem}.
-	 */
+	/// @dev See {IERC1594-redeem}.
 	function redeem(uint256 amount, bytes calldata data) public virtual override {
 		if (amount == 0) revert ERC1594_ZeroAmount();
 
@@ -133,9 +125,7 @@ contract ERC1594 is IERC1594, ERC20, EIP712, AccessControl {
 		_transferWithData(_msgSender(), to, amount, data);
 	}
 
-	/**
-	 * @dev See {IERC1594-transferFromWithData}.
-	 */
+	/// @dev See {IERC1594-transferFromWithData}.
 	function transferFromWithData(
 		address from,
 		address to,
@@ -186,17 +176,13 @@ contract ERC1594 is IERC1594, ERC20, EIP712, AccessControl {
 		return (true, bytes("0x51"), bytes32(0));
 	}
 
-	/**
-	 * @dev issues tokens to a recipient
-	 */
-	function _issue(address tokenHolder, uint256 amount, bytes calldata data) internal virtual {
-		_mint(tokenHolder, amount);
-		emit Issued(_msgSender(), tokenHolder, amount, data);
+	/// @dev issues tokens to a recipient
+	function _issue(address to, uint256 amount, bytes calldata data) internal virtual {
+		_mint(to, amount);
+		emit Issued(_msgSender(), to, amount, data);
 	}
 
-	/**
-	 * @dev burns tokens from a recipient
-	 */
+	/// @dev burns tokens from a recipient
 	function _redeem(address from, uint256 amount, bytes calldata data) internal virtual {
 		if (data.length != 0 && !hasRole(ERC1594_REDEEMER_ROLE, _msgSender())) {
 			(bool authorized, address authorizer) = _validateData(
@@ -213,9 +199,7 @@ contract ERC1594 is IERC1594, ERC20, EIP712, AccessControl {
 		emit Redeemed(_msgSender(), from, amount, data);
 	}
 
-	/**
-	 * @dev transfers tokens from a sender to a recipient with data
-	 */
+	/// @dev transfers tokens from a sender to a recipient with data
 	function _transferWithData(address from, address to, uint256 amount, bytes calldata data) internal virtual {
 		(bool authorized, address authorizer) = _validateData(ERC1594_TRANSFER_AGENT_ROLE, from, to, amount, data);
 		if (!authorized) revert ERC1594_InvalidSignatureData();
@@ -257,7 +241,7 @@ contract ERC1594 is IERC1594, ERC20, EIP712, AccessControl {
 		emit IssuanceDisabled();
 	}
 
-	/*
+	/**
 	 * @param role the role for which the nonce is increased
 	 * @param spender the address that spent the nonce in a signature
 	 */
