@@ -58,7 +58,6 @@ contract ERC1644 is IERC1644, ERC1594 {
 	}
 
 	///  @notice add controllers for the token.
-
 	function addControllers(address[] memory controllers) public virtual onlyRole(ERC1594_ADMIN_ROLE) {
 		uint256 controllersLength = controllers.length;
 		uint256 i;
@@ -119,12 +118,12 @@ contract ERC1644 is IERC1644, ERC1594 {
 	 */
 	function controllerRedeem(
 		address tokenHolder,
-		uint256 value,
+		uint256 amount,
 		bytes calldata data,
 		bytes calldata operatorData
 	) public virtual override onlyController {
-		_burn(tokenHolder, value);
+		_burn(tokenHolder, amount);
 
-		emit ControllerRedemption(_msgSender(), tokenHolder, value, data, operatorData);
+		emit ControllerRedemption(_msgSender(), tokenHolder, amount, data, operatorData);
 	}
 }

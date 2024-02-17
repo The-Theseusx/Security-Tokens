@@ -15,7 +15,7 @@ interface IERC1644 {
 
 	function controllerRedeem(
 		address tokenHolder,
-		uint256 value,
+		uint256 amount,
 		bytes calldata data,
 		bytes calldata operatorData
 	) external;
