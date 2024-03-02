@@ -1,91 +1,95 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import { ERC1400NFTBaseTest } from "./ERC1400NFTBaseTest.t.sol";
+import {ERC1400NFTBaseTest} from "./ERC1400NFTBaseTest.t.sol";
 
 contract ERC1400NFTDocumentTest is ERC1400NFTBaseTest {
-	bytes32 public documentName = "Asset5Data";
-	string public documentURI = "https://offchain.example.com/document/5";
-	bytes32 public documentHash = keccak256(bytes(documentURI));
+    bytes32 public documentName = "Asset5Data";
+    string public documentURI = "https://offchain.example.com/document/5";
+    bytes32 public documentHash = keccak256(bytes(documentURI));
 
-	function testSetDocumentFailsWhenCallerNotAdmin() public {
-		string memory errMsg = accessControlError(alice, ERC1400NFTMockToken.ERC1400_NFT_ADMIN_ROLE());
+    function testSetDocumentFailsWhenCallerNotAdmin() public {
+        vm.startPrank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                AccessControlUnauthorizedAccount.selector, alice, ERC1400NFTMockToken.ERC1400_NFT_ADMIN_ROLE()
+            )
+        );
+        ERC1400NFTMockToken.setDocument(documentName, documentURI, documentHash);
+        vm.stopPrank();
+    }
 
-		vm.startPrank(alice);
-		vm.expectRevert(bytes(errMsg));
-		ERC1400NFTMockToken.setDocument(documentName, documentURI, documentHash);
-		vm.stopPrank();
-	}
+    function testSetDocument() public {
+        vm.startPrank(tokenAdmin);
+        vm.expectEmit(true, true, true, true);
+        emit DocumentUpdated(documentName, documentURI, documentHash);
 
-	function testSetDocument() public {
-		vm.startPrank(tokenAdmin);
-		vm.expectEmit(true, true, true, true);
-		emit DocumentUpdated(documentName, documentURI, documentHash);
+        uint256 setTime = block.timestamp;
+        ERC1400NFTMockToken.setDocument(documentName, documentURI, documentHash);
+        vm.stopPrank();
 
-		uint256 setTime = block.timestamp;
-		ERC1400NFTMockToken.setDocument(documentName, documentURI, documentHash);
-		vm.stopPrank();
+        skip(5 hours);
+        (string memory docUri, bytes32 docHash, uint256 lastUpdated) = ERC1400NFTMockToken.getDocument(documentName);
 
-		skip(5 hours);
-		(string memory docUri, bytes32 docHash, uint256 lastUpdated) = ERC1400NFTMockToken.getDocument(documentName);
+        assertEq(docUri, documentURI, "documentURI should be equal to docUri");
+        assertEq(docHash, documentHash, "documentHash should be equal to docHash");
+        assertEq(lastUpdated, setTime, "lastUpdated should be equal to setTime");
+    }
 
-		assertEq(docUri, documentURI, "documentURI should be equal to docUri");
-		assertEq(docHash, documentHash, "documentHash should be equal to docHash");
-		assertEq(lastUpdated, setTime, "lastUpdated should be equal to setTime");
-	}
+    function testRemoveDocumentFailsWhenCallerNotAdmin() public {
+        vm.startPrank(tokenAdmin);
+        ERC1400NFTMockToken.setDocument(documentName, documentURI, documentHash);
+        vm.stopPrank();
 
-	function testRemoveDocumentFailsWhenCallerNotAdmin() public {
-		vm.startPrank(tokenAdmin);
-		ERC1400NFTMockToken.setDocument(documentName, documentURI, documentHash);
-		vm.stopPrank();
+        vm.startPrank(notTokenAdmin);
 
-		string memory errMsg = accessControlError(notTokenAdmin, ERC1400NFTMockToken.ERC1400_NFT_ADMIN_ROLE());
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                AccessControlUnauthorizedAccount.selector, notTokenAdmin, ERC1400NFTMockToken.ERC1400_NFT_ADMIN_ROLE()
+            )
+        );
+        ERC1400NFTMockToken.removeDocument(documentName);
+        vm.stopPrank();
+    }
 
-		vm.startPrank(notTokenAdmin);
+    function testRemoveDocument() public {
+        vm.startPrank(tokenAdmin);
+        ERC1400NFTMockToken.setDocument(documentName, documentURI, documentHash);
 
-		vm.expectRevert(bytes(errMsg));
-		ERC1400NFTMockToken.removeDocument(documentName);
-		vm.stopPrank();
-	}
+        skip(5 minutes);
 
-	function testRemoveDocument() public {
-		vm.startPrank(tokenAdmin);
-		ERC1400NFTMockToken.setDocument(documentName, documentURI, documentHash);
+        vm.expectEmit(true, true, true, true);
+        emit DocumentRemoved(documentName, documentURI, documentHash);
+        ERC1400NFTMockToken.removeDocument(documentName);
+        vm.stopPrank();
 
-		skip(5 minutes);
+        skip(5 hours);
 
-		vm.expectEmit(true, true, true, true);
-		emit DocumentRemoved(documentName, documentURI, documentHash);
-		ERC1400NFTMockToken.removeDocument(documentName);
-		vm.stopPrank();
+        (string memory docUri, bytes32 docHash, uint256 lastUpdated) = ERC1400NFTMockToken.getDocument(documentName);
 
-		skip(5 hours);
+        assertEq(docUri, "", "docUri should be empty");
+        assertEq(docHash, bytes32(0), "docHash should be empty");
+        assertEq(lastUpdated, 0, "lastUpdated should be 0");
+    }
 
-		(string memory docUri, bytes32 docHash, uint256 lastUpdated) = ERC1400NFTMockToken.getDocument(documentName);
+    function testGetAllDocuments() public {
+        bytes32[] memory allDocs = ERC1400NFTMockToken.getAllDocuments();
 
-		assertEq(docUri, "", "docUri should be empty");
-		assertEq(docHash, bytes32(0), "docHash should be empty");
-		assertEq(lastUpdated, 0, "lastUpdated should be 0");
-	}
+        assertEq(allDocs.length, 0, "allDocs should be empty");
 
-	function testGetAllDocuments() public {
-		bytes32[] memory allDocs = ERC1400NFTMockToken.getAllDocuments();
+        vm.startPrank(tokenAdmin);
+        ERC1400NFTMockToken.setDocument(documentName, documentURI, documentHash);
 
-		assertEq(allDocs.length, 0, "allDocs should be empty");
+        skip(5 minutes);
 
-		vm.startPrank(tokenAdmin);
-		ERC1400NFTMockToken.setDocument(documentName, documentURI, documentHash);
+        ERC1400NFTMockToken.setDocument("Asset6", "https://example.com", keccak256("https://example.com"));
+        vm.stopPrank();
 
-		skip(5 minutes);
+        allDocs = ERC1400NFTMockToken.getAllDocuments();
 
-		ERC1400NFTMockToken.setDocument("Asset6", "https://example.com", keccak256("https://example.com"));
-		vm.stopPrank();
+        assertEq(allDocs.length, 2, "allDocs should have 2 documents");
 
-		allDocs = ERC1400NFTMockToken.getAllDocuments();
-
-		assertEq(allDocs.length, 2, "allDocs should have 2 documents");
-
-		assertEq(allDocs[0], documentName, "allDocs[0] should be equal to documentName");
-		assertEq(allDocs[1], "Asset6", "allDocs[1] should be equal to Asset6");
-	}
+        assertEq(allDocs[0], documentName, "allDocs[0] should be equal to documentName");
+        assertEq(allDocs[1], "Asset6", "allDocs[1] should be equal to Asset6");
+    }
 }
