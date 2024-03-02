@@ -2,5 +2,6 @@
 	"editor.formatOnSave": true,
 	"solidity.packageDefaultDependenciesDirectory": "lib",
 	"cSpell.words": ["ITID", "theseusX", "THESEUSX"],
-	"solidity.compileUsingRemoteVersion": "v0.8.21+commit.d9974bed"
+	"solidity.compileUsingRemoteVersion": "v0.8.21+commit.d9974bed",
+	"solidity.formatter": "forge"
 }
