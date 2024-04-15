@@ -96,7 +96,7 @@ contract SigUtils {
         return keccak256(abi.encode(_msgTypeHash, from, to, tokenId, _nonce, _deadline));
     }
 
-    ///@dev computes the hash of the fully encoded EIP-712 message for the domain, which can be used to recover the signer
+    ///@dev computes the hash of the fully encoded EIP-712 message for the domain of ERC1594 token, which can be used to recover the signer
     function getERC1594TypedDataHash(address from, address to, uint256 amount, uint256 nonce, uint48 deadline)
         public
         view
