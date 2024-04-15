@@ -20,8 +20,6 @@ abstract contract BaseTestStorage is Test {
 
     address public constant ZERO_ADDRESS = address(0);
 
-    uint256 public constant INITIAL_SUPPLY = 100_000_000e18;
-
     address public tokenAdmin = vm.addr(TOKEN_ADMIN_PK);
     address public notTokenAdmin = vm.addr(NOT_ADMIN_PK);
     address public tokenIssuer = vm.addr(TOKEN_ISSUER_PK);
@@ -31,4 +29,6 @@ abstract contract BaseTestStorage is Test {
     address public bob = vm.addr(BOB_PK);
 
     SigUtils public sigUtilsContract;
+
+    error AccessControlUnauthorizedAccount(address account, bytes32 neededRole);
 }
