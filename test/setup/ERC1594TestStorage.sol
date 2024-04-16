@@ -15,10 +15,15 @@ abstract contract ERC1594TestStorage is BaseTestStorage {
 
     ERC1594 public mockERC1594;
 
+    event Issued(address indexed operator, address indexed to, uint256 amount, bytes data);
+    event Redeemed(address indexed operator, address indexed from, uint256 amount, bytes data);
+
     error ERC1594_IssuanceDisabled();
     error ERC1594_InvalidAddress(address addr);
     error ERC1594_InvalidReceiver(address receiver);
     error ERC1594_ZeroAmount();
     error ERC1594_InvalidData();
     error ERC1594_InvalidSignatureData();
+
+    error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed);
 }
