@@ -4,8 +4,9 @@ pragma solidity ^0.8.0;
 import { ERC1594TestStorage } from "../setup/ERC1594TestStorage.sol";
 import { ERC1594 } from "../../src/ERC1594/ERC1594.sol";
 import { SigUtils } from "../utils/SigUtils.sol";
+import { ERC1594SigUtils } from "../setup/ERC1594SigUtils.sol";
 
-abstract contract ERC1594BaseTest is ERC1594TestStorage {
+abstract contract ERC1594BaseTest is ERC1594TestStorage, ERC1594SigUtils {
     function setUp() public {
         mockERC1594 = new ERC1594(
             TOKEN_NAME, TOKEN_SYMBOL, TOKEN_VERSION, tokenAdmin, tokenIssuer, tokenRedeemer, tokenTransferAgent
