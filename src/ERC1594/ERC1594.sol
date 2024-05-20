@@ -48,6 +48,7 @@ contract ERC1594 is IERC1594, ERC20, EIP712, AccessControl {
     error ERC1594_ZeroAmount();
     error ERC1594_InvalidData();
     error ERC1594_InvalidSignatureData();
+    error ERC1594_ExpiredSignature();
 
     constructor(
         string memory name_,
@@ -223,6 +224,8 @@ contract ERC1594 is IERC1594, ERC20, EIP712, AccessControl {
         returns (bool, address authorizer)
     {
         (bytes memory signature, uint48 deadline) = abi.decode(data, (bytes, uint48));
+
+        if (block.timestamp > deadline) revert ERC1594_ExpiredSignature();
 
         bytes32 authorizerRole_ = authorizerRole;
         bytes32 structData = keccak256(
