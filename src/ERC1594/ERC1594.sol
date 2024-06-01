@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import { ERC20 } from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
-import { AccessControl } from "openzeppelin-contracts/contracts/access/AccessControl.sol";
+import { ERC1643 } from "../ERC1643/ERC1643.sol";
 import { IERC1594 } from "./IERC1594.sol";
 import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
@@ -12,7 +12,7 @@ import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA
  * @dev ERC1594 core security logic for fungible security tokens
  * @dev Utilizing ERC712 and ECDSA to validate data
  */
-contract ERC1594 is IERC1594, ERC20, EIP712, AccessControl {
+contract ERC1594 is IERC1594, ERC20, EIP712, ERC1643 {
     /// @dev EIP712 typehash for data validation
     bytes32 public constant ERC1594_DATA_VALIDATION_HASH =
         keccak256("ERC1594ValidateData(address from,address to,uint256 amount,uint256 nonce,uint48 deadline)");
@@ -58,7 +58,7 @@ contract ERC1594 is IERC1594, ERC20, EIP712, AccessControl {
         address tokenIssuer,
         address tokenRedeemer,
         address tokenTransferAgent
-    ) ERC20(name_, symbol_) EIP712(name_, version_) {
+    ) ERC20(name_, symbol_) EIP712(name_, version_) ERC1643(tokenAdmin, ERC1594_ADMIN_ROLE) {
         _setRoleAdmin(ERC1594_ADMIN_ROLE, ERC1594_ADMIN_ROLE);
         _setRoleAdmin(ERC1594_ISSUER_ROLE, ERC1594_ADMIN_ROLE);
         _setRoleAdmin(ERC1594_REDEEMER_ROLE, ERC1594_ADMIN_ROLE);
