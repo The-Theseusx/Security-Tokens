@@ -17,6 +17,7 @@ abstract contract ERC1594TestStorage is BaseTestStorage {
 
     event Issued(address indexed operator, address indexed to, uint256 amount, bytes data);
     event Redeemed(address indexed operator, address indexed from, uint256 amount, bytes data);
+    event TransferWithData(address indexed from, address indexed to, uint256 amount, bytes data);
 
     error ERC1594_IssuanceDisabled();
     error ERC1594_InvalidAddress(address addr);
@@ -24,6 +25,7 @@ abstract contract ERC1594TestStorage is BaseTestStorage {
     error ERC1594_ZeroAmount();
     error ERC1594_InvalidData();
     error ERC1594_InvalidSignatureData();
+    error ERC1594_ExpiredSignature();
 
     error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed);
 }
