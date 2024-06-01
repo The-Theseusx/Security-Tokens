@@ -2,12 +2,13 @@
 pragma solidity ^0.8.0;
 
 import { ERC721 } from "openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
-import { IERC1594NFT } from "./IERC1594NFT.sol";
 import { AccessControl } from "openzeppelin-contracts/contracts/access/AccessControl.sol";
+import { ERC1643 } from "../../ERC1643/ERC1643.sol";
+import { IERC1594NFT } from "./IERC1594NFT.sol";
 import { EIP712 } from "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 
-contract ERC1594NFT is IERC1594NFT, ERC721, EIP712, AccessControl {
+contract ERC1594NFT is IERC1594NFT, ERC721, EIP712, ERC1643 {
     /// @dev EIP712 typehash for data validation
     bytes32 public constant ERC1594NFT_DATA_VALIDATION_HASH =
         keccak256("ERC1594NFTValidateData(address from,address to,uint256 tokenId,uint256 nonce,uint48 deadline)");
@@ -52,7 +53,7 @@ contract ERC1594NFT is IERC1594NFT, ERC721, EIP712, AccessControl {
         address tokenIssuer,
         address tokenRedeemer,
         address tokenTransferAgent
-    ) ERC721(name_, symbol_) EIP712(name_, version_) {
+    ) ERC721(name_, symbol_) EIP712(name_, version_) ERC1643(tokenAdmin, ERC1594NFT_ADMIN_ROLE) {
         _setRoleAdmin(ERC1594NFT_ADMIN_ROLE, ERC1594NFT_ADMIN_ROLE);
         _setRoleAdmin(ERC1594NFT_ISSUER_ROLE, ERC1594NFT_ADMIN_ROLE);
         _setRoleAdmin(ERC1594NFT_REDEEMER_ROLE, ERC1594NFT_ADMIN_ROLE);
