@@ -128,7 +128,8 @@ contract ERC1594 is IERC1594, ERC20, EIP712, AccessControl {
         if (amount == 0) revert ERC1594_ZeroAmount();
         if (data.length == 0) revert ERC1594_InvalidData();
 
-        _transferWithData(_msgSender(), to, amount, data);
+        _transfer(_msgSender(), to, amount);
+        emit TransferWithData(_msgSender(), to, amount, data);
     }
 
     /// @dev See {IERC1594-transferFromWithData}.
@@ -228,9 +229,8 @@ contract ERC1594 is IERC1594, ERC20, EIP712, AccessControl {
         if (block.timestamp > deadline) revert ERC1594_ExpiredSignature();
 
         bytes32 authorizerRole_ = authorizerRole;
-        bytes32 structData = keccak256(
-            abi.encodePacked(ERC1594_DATA_VALIDATION_HASH, from, to, amount, _roleNonce[authorizerRole_], deadline)
-        );
+        bytes32 structData =
+            keccak256(abi.encode(ERC1594_DATA_VALIDATION_HASH, from, to, amount, _roleNonce[authorizerRole_], deadline));
         address recoveredSigner = ECDSA.recover(_hashTypedDataV4(structData), signature);
 
         return (hasRole(authorizerRole_, recoveredSigner), recoveredSigner);
